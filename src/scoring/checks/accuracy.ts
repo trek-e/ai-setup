@@ -45,8 +45,8 @@ function validateDocumentedCommands(dir: string): {
   const valid: string[] = [];
   const invalid: string[] = [];
 
-  // Match npm/yarn/pnpm/bun run commands
-  const cmdPattern = /(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?(\S+)/g;
+  // Match npm/yarn/pnpm/bun run commands — strip trailing markdown backticks/punctuation
+  const cmdPattern = /(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?([a-zA-Z0-9_:@./-]+)/g;
   const seen = new Set<string>();
 
   let match: RegExpExecArray | null;

@@ -60,7 +60,7 @@ export function checkQuality(dir: string): Check[] {
         : 'No CLAUDE.md to check',
     suggestion: hasCommands
       ? undefined
-      : 'Add build, test, and lint commands — this is the highest-impact content (ETH Zurich research)',
+      : 'Add build, test, and lint commands to CLAUDE.md',
   });
 
   // 2. Not bloated (token budget)
@@ -153,7 +153,7 @@ export function checkQuality(dir: string): Check[] {
       ? `${treeLineCount}-line directory tree detected in code block`
       : 'No large directory trees found',
     suggestion: hasLargeTree
-      ? 'Remove directory tree listings — agents discover project structure by reading code (ETH Zurich)'
+      ? 'Remove directory tree listings — agents discover project structure by reading code'
       : undefined,
   });
 

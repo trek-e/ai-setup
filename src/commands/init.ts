@@ -73,7 +73,10 @@ export async function initCommand(options: InitOptions) {
     }
     console.log(chalk.green('  ✓ Provider saved. Continuing with init.\n'));
   }
-  console.log(chalk.dim(`  Provider: ${config.provider} | Model: ${config.model}\n`));
+  const displayModel = config.model === 'default' && config.provider === 'claude-cli'
+    ? process.env.ANTHROPIC_MODEL || 'default (inherited from Claude Code)'
+    : config.model;
+  console.log(chalk.dim(`  Provider: ${config.provider} | Model: ${displayModel}\n`));
 
   // Step 2: Collect fingerprint
   console.log(chalk.hex('#6366f1').bold('  Step 2/4 — Scan project\n'));
@@ -143,7 +146,7 @@ export async function initCommand(options: InitOptions) {
     console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Generating configs\n'));
     console.log(chalk.dim('  AI is creating agent config files tailored to your project.\n'));
   }
-  console.log(chalk.dim('  This usually takes 1–3 minutes.\n'));
+  console.log(chalk.dim('  This can take a couple of minutes depending on your model and provider.\n'));
 
   const genStartTime = Date.now();
   const genSpinner = ora('Generating setup...').start();
