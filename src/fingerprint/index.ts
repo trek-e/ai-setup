@@ -37,7 +37,7 @@ export function collectFingerprint(dir: string): Fingerprint {
     gitRemoteUrl,
     packageName: pkgInfo.name,
     languages,
-    frameworks: pkgInfo.frameworks,
+    frameworks: [],
     fileTree,
     existingConfigs,
     codeAnalysis,

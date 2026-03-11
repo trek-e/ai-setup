@@ -113,32 +113,46 @@ export function displayScoreDelta(before: ScoreResult, after: ScoreResult): void
   const beforeGc = gradeColor(before.grade);
   const afterGc = gradeColor(after.grade);
 
-  console.log('');
-  console.log(chalk.gray('  ╭───────────────────────────────────────────────────╮'));
-  console.log(chalk.gray('  │') + '                                                   ' + chalk.gray('│'));
-  console.log(
-    chalk.gray('  │') +
+  const BOX_INNER = 51;
+
+  const scorePart = `Score: ${before.score} > ${after.score}`;
+  const deltaPart = `${deltaStr} pts`;
+  const gradePart = `${before.grade} > ${after.grade}`;
+  const contentLen = 3 + scorePart.length + deltaPart.length + gradePart.length + 8;
+  const totalPad = BOX_INNER - contentLen;
+  const pad1 = Math.max(2, Math.ceil(totalPad / 2));
+  const pad2 = Math.max(1, totalPad - pad1);
+
+  const scoreLineFormatted =
     '   Score: ' +
     beforeGc(`${before.score}`) +
-    chalk.gray(' → ') +
+    chalk.gray(' \u2192 ') +
     afterGc(`${after.score}`) +
-    '        ' +
-    deltaColor(`${deltaStr} pts`) +
-    '        ' +
+    ' '.repeat(pad1) +
+    deltaColor(deltaPart) +
+    ' '.repeat(pad2) +
     beforeGc(before.grade) +
-    chalk.gray(' → ') +
-    afterGc(after.grade) +
-    '   ' + chalk.gray('│')
-  );
-  console.log(
-    chalk.gray('  │') +
-    `   ${progressBar(before.score, before.maxScore, 18)}` +
-    chalk.gray('  →  ') +
-    `${progressBar(after.score, after.maxScore, 18)}` +
-    '   ' + chalk.gray('│')
-  );
-  console.log(chalk.gray('  │') + '                                                   ' + chalk.gray('│'));
-  console.log(chalk.gray('  ╰───────────────────────────────────────────────────╯'));
+    chalk.gray(' \u2192 ') +
+    afterGc(after.grade);
+
+  // Pad to exact box width: visible chars = scorePart + pad1 + deltaPart + pad2 + gradePart + 3 leading spaces
+  const visibleLen = 3 + scorePart.length + pad1 + deltaPart.length + pad2 + gradePart.length;
+  const trailingPad = Math.max(0, BOX_INNER - visibleLen);
+
+  const barWidth = Math.floor((BOX_INNER - 12) / 2);
+  const barLine =
+    `   ${progressBar(before.score, before.maxScore, barWidth)}` +
+    chalk.gray('  \u2192  ') +
+    progressBar(after.score, after.maxScore, barWidth) +
+    '   ';
+
+  console.log('');
+  console.log(chalk.gray('  ╭' + '─'.repeat(BOX_INNER) + '╮'));
+  console.log(chalk.gray('  │') + ' '.repeat(BOX_INNER) + chalk.gray('│'));
+  console.log(chalk.gray('  │') + scoreLineFormatted + ' '.repeat(trailingPad) + chalk.gray('│'));
+  console.log(chalk.gray('  │') + barLine + chalk.gray('│'));
+  console.log(chalk.gray('  │') + ' '.repeat(BOX_INNER) + chalk.gray('│'));
+  console.log(chalk.gray('  ╰' + '─'.repeat(BOX_INNER) + '╯'));
   console.log('');
 
   // Show what improved

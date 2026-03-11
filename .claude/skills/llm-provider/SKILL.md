@@ -68,7 +68,7 @@ export class MyProvider implements LLMProvider {
 ## JSON Parsing Utilities
 
 ```typescript
-import { extractJson, stripMarkdownFences, parseJsonResponse } from '../llm/utils.js';
+import { extractJson, stripMarkdownFences, parseJsonResponse, estimateTokens } from '../llm/utils.js';
 
 // Strips ```json fences and parses
 const obj = parseJsonResponse<MyType>(rawLlmOutput);
@@ -84,16 +84,6 @@ const tokens = estimateTokens(prompt);
 
 1. `ANTHROPIC_API_KEY` → `AnthropicProvider` (`@anthropic-ai/sdk`, default: `claude-sonnet-4-6`)
 2. `VERTEX_PROJECT_ID` / `GCP_PROJECT_ID` → `VertexProvider` (`@anthropic-ai/vertex-sdk`, `google-auth-library`, default region: `us-east5`)
-3. `OPENAI_API_KEY` → `OpenAICompatProvider` (`openai`, default: `gpt-4.1`; `OPENAI_BASE_URL` for custom)
+3. `OPENAI_API_KEY` → `OpenAICompatProvider` (`openai`, default: `gpt-4.1`; `OPENAI_BASE_URL` for custom endpoints)
 4. `~/.caliber/config.json` — written by `caliber config`
-5. `CALIBER_MODEL` — overrides model for any provider
-
-## Transient Error Handling
-
-`llmCall()` retries automatically. For manual checks:
-
-```typescript
-import { TRANSIENT_ERRORS } from '../llm/index.js';
-
-const isTransient = TRANSIENT_ERRORS.some(msg => err.message.includes(msg));
-```
+5. `CALIBER_MODEL` — overrides model name for any provider

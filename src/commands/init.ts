@@ -70,12 +70,10 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim('  Detecting languages, frameworks, file structure, and existing configs.\n'));
   const spinner = ora('Analyzing project...').start();
   const fingerprint = collectFingerprint(process.cwd());
+  await enrichFingerprintWithLLM(fingerprint, process.cwd());
   spinner.succeed('Project analyzed');
 
-  const enrichmentPromise = enrichFingerprintWithLLM(fingerprint, process.cwd());
-
   console.log(chalk.dim(`  Languages: ${fingerprint.languages.join(', ') || 'none detected'}`));
-  console.log(chalk.dim(`  Frameworks: ${fingerprint.frameworks.join(', ') || 'none detected'}`));
   console.log(chalk.dim(`  Files: ${fingerprint.fileTree.length} found\n`));
 
   // Step 3: Determine target agent
@@ -89,9 +87,6 @@ export async function initCommand(options: InitOptions) {
   if (isEmpty) {
     fingerprint.description = await promptInput('What will you build in this project?');
   }
-
-  // Await LLM enrichment before generation
-  await enrichmentPromise;
 
   // Step 4: Generate setup via AI
   console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Auditing your configs\n'));

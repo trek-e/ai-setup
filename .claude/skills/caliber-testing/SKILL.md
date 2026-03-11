@@ -4,7 +4,7 @@ description: Testing patterns for @rely-ai/caliber. Use when writing or fixing V
 ---
 # Testing in Caliber
 
-Calibr uses Vitest with a globally mocked LLM provider — no real API calls in tests.
+Caliber uses Vitest with a globally mocked LLM provider — no real API calls in tests.
 
 ## Running Tests
 

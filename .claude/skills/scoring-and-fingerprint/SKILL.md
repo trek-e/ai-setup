@@ -66,32 +66,21 @@ Collects structured project context before sending to the LLM for config generat
 | `code-analysis.ts` | `analyzeCode()` — file summaries, API routes, config files |
 | `index.ts` | Orchestrates all above, calls `enrichFingerprintWithLLM()` for richer detection |
 
-### `Fingerprint` type
+### `Fingerprint` type (key fields)
 
 ```typescript
 interface Fingerprint {
-  gitRemoteUrl?: string;
+  gitRemote?: string;
   languages: string[];
   frameworks: string[];
+  packages: PackageInfo[];
   fileTree: string;
-  packageInfo: PackageInfo;
   existingConfigs: ExistingConfigs;
   codeAnalysis: CodeAnalysis;
-  hash: string; // SHA — used for drift detection in caliber refresh
+  hash: string;  // for drift detection
 }
 ```
 
-### Adding a new fingerprint field
+### Hash / drift detection
 
-1. Add a collector function in an existing or new `src/fingerprint/*.ts` file
-2. Call it in `collectFingerprint()` in `src/fingerprint/index.ts`
-3. Add the field to the `Fingerprint` interface
-4. Update `computeFingerprintHash()` if the new field should influence drift detection
-5. Include the new data in the prompt built by `buildGeneratePrompt()` in `src/ai/generate.ts`
-
-### Scanner (`src/scanner/index.ts`)
-
-Separate from fingerprinting — detects already-installed platform configs:
-- `detectPlatforms()` — checks for CLAUDE.md, .cursor/rules/, .cursorrules
-- `scanLocalState()` — hashes local skill/rule files for sync comparison
-- `compareState()` — diffs local vs remote manifest state
+`computeFingerprintHash()` in `src/fingerprint/index.ts` produces a SHA hash stored in `.caliber/state.json`. The `accuracy` scoring check compares this against the current fingerprint to detect stale configs.

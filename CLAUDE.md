@@ -2,7 +2,7 @@
 
 ## What Is This
 
-`@rely-ai/caliber` — open-source CLI that fingerprints coding projects and generates optimized AI agent configs (CLAUDE.md, .cursor/rules/, skills). Supports Anthropic, OpenAI, Google Vertex AI, and any OpenAI-compatible endpoint.
+`@rely-ai/caliber` — CLI that fingerprints projects and generates AI agent configs (CLAUDE.md, .cursor/rules/, skills). Supports Anthropic (`@anthropic-ai/sdk`), OpenAI (`openai`), Google Vertex AI (`@anthropic-ai/vertex-sdk`, `google-auth-library`), and any OpenAI-compatible endpoint.
 
 ## Monorepo Layout
 
@@ -27,52 +27,28 @@ npx vitest run src/scoring/__tests__/accuracy.test.ts  # Single file
 
 ## Architecture
 
-**Entry**: `src/bin.ts` (version check) → `src/cli.ts` (Commander, registers all commands)
+**Entry**: `src/bin.ts` → `src/cli.ts` (Commander.js, all commands)
 
-**LLM layer** (`src/llm/`):
-- `types.ts` — `LLMProvider` interface, `LLMConfig`, `LLMCallOptions`, `LLMStreamCallbacks`
-- `config.ts` — env vars → `~/.caliber/config.json`; `DEFAULT_MODELS`, `loadConfig()`, `resolveFromEnv()`
-- `anthropic.ts` (`@anthropic-ai/sdk`), `vertex.ts` (`@anthropic-ai/vertex-sdk`, `google-auth-library`), `openai-compat.ts` (`openai`)
-- `utils.ts` — `extractJson()` bracket-balancing parser, `stripMarkdownFences()`, `parseJsonResponse()`, `estimateTokens()`
-- `index.ts` — `llmCall()`, `llmJsonCall()`, `getProvider()`, retry + backoff, `TRANSIENT_ERRORS`
+**LLM** (`src/llm/`): `types.ts` interface · `config.ts` (env → `~/.caliber/config.json`, `DEFAULT_MODELS`) · `anthropic.ts` · `vertex.ts` · `openai-compat.ts` · `utils.ts` (`extractJson`, `estimateTokens`) · `index.ts` (`llmCall`, `llmJsonCall`, retry/backoff)
 
-**AI logic** (`src/ai/`):
-- `generate.ts` — streaming init via `generateSetup()`
-- `refine.ts` — conversation refinement via `refineSetup()`
-- `refresh.ts` — diff-based updates via `refreshDocs()`
-- `learn.ts` — session event analysis via `analyzeEvents()`
-- `detect.ts` — LLM-based framework detection via `detectFrameworks()`
-- `prompts.ts` — all system prompts (`GENERATION_SYSTEM_PROMPT`, `REFINE_SYSTEM_PROMPT`, `REFRESH_SYSTEM_PROMPT`, `LEARN_SYSTEM_PROMPT`, `FINGERPRINT_SYSTEM_PROMPT`)
+**AI** (`src/ai/`): `generate.ts` (streaming init) · `refine.ts` (chat refinement) · `refresh.ts` (diff-based updates) · `learn.ts` (session analysis) · `detect.ts` (LLM framework detection) · `prompts.ts` (all system prompts)
 
-**Commands** (`src/commands/`): `init`, `regenerate` (alias: `update`/`regen`), `status`, `undo`, `config`, `recommend`, `score`, `refresh`, `hooks`, `learn`
+**Commands** (`src/commands/`): `init`, `regenerate` (alias `update`/`regen`), `status`, `undo`, `config`, `recommend`, `score`, `refresh`, `hooks`, `learn`
 
-**Fingerprinting** (`src/fingerprint/`):
-- `git.ts`, `languages.ts`, `package-json.ts` (uses `glob`/`globSync`), `file-tree.ts`, `existing-config.ts`, `code-analysis.ts`
-- `index.ts` — orchestrates all above, then calls `enrichFingerprintWithLLM()`
-- Hash stored in `Fingerprint.hash` for drift detection
+**Fingerprint** (`src/fingerprint/`): `git.ts` · `languages.ts` · `package-json.ts` (uses `glob`/`globSync`) · `file-tree.ts` · `existing-config.ts` · `code-analysis.ts` · `index.ts` (orchestrates + `enrichFingerprintWithLLM`)
 
-**Writers** (`src/writers/`):
-- `claude/index.ts`, `cursor/index.ts` — write config files
-- `staging.ts` — buffers writes before user confirmation
-- `manifest.ts` — tracks written files in `.caliber/manifest.json`
-- `backup.ts` — timestamped backups in `.caliber/backups/`
-- `refresh.ts` — diff-targeted doc updates
+**Writers** (`src/writers/`): `claude/` · `cursor/` · `staging.ts` (buffer before confirm) · `manifest.ts` (`.caliber/manifest.json`) · `backup.ts` (`.caliber/backups/`) · `refresh.ts`
 
-**Scoring** (`src/scoring/`): Deterministic, no LLM. Checks: `existence`, `quality`, `coverage`, `accuracy`, `freshness`, `bonus`. Run via `caliber score`. Constants in `scoring/constants.ts`.
+**Scoring** (`src/scoring/`): Deterministic, no LLM. Categories: existence · quality · coverage · accuracy · freshness · bonus. Constants in `scoring/constants.ts`. Run: `caliber score`.
 
-**Learner** (`src/learner/`):
-- `storage.ts` — captures Claude Code session tool events → `.caliber/learning/`
-- `writer.ts` — writes learned skills/instructions to CLAUDE.md
-- `stdin.ts` — reads hook-piped events
-- Finalized via `caliber learn finalize`
+**Learner** (`src/learner/`): `storage.ts` (session events → `.caliber/learning/`) · `writer.ts` · `stdin.ts`. Finalize: `caliber learn finalize`.
 
-**Scanner** (`src/scanner/index.ts`): `detectPlatforms()`, `scanLocalState()`, `compareState()` — detects installed claude/cursor configs.
+**Scanner** (`src/scanner/index.ts`): `detectPlatforms()` · `scanLocalState()` · `compareState()`
 
-## LLM Provider Config
+## LLM Provider Resolution
 
-Resolution order (highest priority first):
-1. `ANTHROPIC_API_KEY` → Anthropic (`claude-sonnet-4-6` default)
-2. `VERTEX_PROJECT_ID` / `GCP_PROJECT_ID` → Vertex AI (`us-east5`; ADC, `VERTEX_SA_CREDENTIALS`, or `GOOGLE_APPLICATION_CREDENTIALS`)
+1. `ANTHROPIC_API_KEY` → Anthropic (`claude-sonnet-4-6`)
+2. `VERTEX_PROJECT_ID` / `GCP_PROJECT_ID` → Vertex (`us-east5`; ADC, `VERTEX_SA_CREDENTIALS`, or `GOOGLE_APPLICATION_CREDENTIALS`)
 3. `OPENAI_API_KEY` → OpenAI (`gpt-4.1`; `OPENAI_BASE_URL` for custom endpoints)
 4. `~/.caliber/config.json` — written by `caliber config`
 5. `CALIBER_MODEL` — overrides model for any provider
@@ -80,27 +56,23 @@ Resolution order (highest priority first):
 ## Testing
 
 - **Framework**: Vitest (`globals: true`, `environment: node`)
-- **Setup**: `src/test/setup.ts` — globally mocks LLM provider (no real API calls)
+- **Setup**: `src/test/setup.ts` — globally mocks `llmCall`/`llmJsonCall`/`getProvider`
 - **Location**: `src/**/__tests__/*.test.ts`
 - **Coverage**: v8; excludes `src/test/`, `src/bin.ts`, `src/cli.ts`, `src/commands/**`, `dist/**`
-- Focus: `src/llm/`, `src/scoring/`, `src/fingerprint/`, `src/ai/`
 
-## TypeScript Conventions
+## Key Conventions
 
-- Strict mode, ES2022 target, `moduleResolution: bundler`
 - **ES module imports require `.js` extension** even for `.ts` source files
-- Prefer `unknown` over `any`; explicit types on params and return values
-- Key deps: `commander`, `chalk`, `ora`, `@inquirer/confirm`, `@inquirer/select`, `glob`, `tsup`
-
-## Error Handling
-
+- Strict mode, ES2022 target, `moduleResolution: bundler`
+- Prefer `unknown` over `any`; explicit types on params/returns
 - `throw new Error('__exit__')` — clean CLI exit, no stack trace
-- Use `ora` spinner `.fail()` before rethrowing async errors
-- Transient LLM errors (overload, rate limit) auto-retry in `llmCall()`
+- Use `ora` spinners with `.fail()` before rethrowing async errors
+- Transient LLM errors auto-retry in `llmCall()` via `TRANSIENT_ERRORS`
+- Key deps: `commander`, `chalk`, `ora`, `@inquirer/confirm`, `@inquirer/select`, `glob`, `tsup`
 
 ## Commit Convention
 
-`feat:` → minor, `fix:`/`refactor:`/`chore:` → patch, `feat!:` → major
+`feat:` → minor · `fix:`/`refactor:`/`chore:` → patch · `feat!:` → major
 Scope optional: `feat(scanner): detect Cursor config`
 
 ## Permissions
