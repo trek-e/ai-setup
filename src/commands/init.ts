@@ -31,7 +31,9 @@ interface InitOptions {
 }
 
 export async function initCommand(options: InitOptions) {
-  console.log(chalk.bold.hex('#6366f1')(`
+  const brand = chalk.hex('#EB9D83');
+  const title = chalk.hex('#83D1EB');
+  console.log(brand.bold(`
    ██████╗ █████╗ ██╗     ██╗██████╗ ███████╗██████╗
   ██╔════╝██╔══██╗██║     ██║██╔══██╗██╔════╝██╔══██╗
   ██║     ███████║██║     ██║██████╔╝█████╗  ██████╔╝
@@ -41,20 +43,20 @@ export async function initCommand(options: InitOptions) {
   `));
   console.log(chalk.dim('  Configure your coding agent environment\n'));
 
-  console.log(chalk.bold('  What is Caliber?\n'));
+  console.log(title.bold('  What is Caliber?\n'));
   console.log(chalk.dim('  Caliber audits your AI agent configurations and suggests targeted'));
   console.log(chalk.dim('  improvements. It analyzes CLAUDE.md, .cursorrules, and skills'));
   console.log(chalk.dim('  against your actual codebase — keeping what works, fixing'));
   console.log(chalk.dim('  what\'s stale, and adding what\'s missing.\n'));
 
-  console.log(chalk.bold('  How it works:\n'));
+  console.log(title.bold('  How it works:\n'));
   console.log(chalk.dim('  1. Scan      Analyze your code, dependencies, and existing configs'));
   console.log(chalk.dim('  2. Generate  AI creates or improves config files for your project'));
   console.log(chalk.dim('  3. Review    You accept, refine, or decline the proposed changes'));
   console.log(chalk.dim('  4. Apply     Config files are written with backups\n'));
 
   // Step 1: Check LLM config (or ask on first run)
-  console.log(chalk.hex('#6366f1').bold('  Step 1/4 — How do you want to use Caliber?\n'));
+  console.log(title.bold('  Step 1/4 — How do you want to use Caliber?\n'));
   let config = loadConfig();
   if (!config) {
     console.log(chalk.dim('  No LLM provider set yet. Choose how to run Caliber:\n'));
@@ -79,7 +81,7 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim(`  Provider: ${config.provider} | Model: ${displayModel}\n`));
 
   // Step 2: Collect fingerprint
-  console.log(chalk.hex('#6366f1').bold('  Step 2/4 — Scan project\n'));
+  console.log(title.bold('  Step 2/4 — Scan project\n'));
   console.log(chalk.dim('  Detecting languages, dependencies, file structure, and existing configs.\n'));
   const spinner = ora('Analyzing project...').start();
   const fingerprint = collectFingerprint(process.cwd());
@@ -94,7 +96,7 @@ export async function initCommand(options: InitOptions) {
 
   // Baseline score before generation
   const baselineScore = computeLocalScore(process.cwd(), targetAgent);
-  console.log(chalk.hex('#6366f1').bold('  Current project score\n'));
+  console.log(title.bold('  Current project score\n'));
   displayScore(baselineScore);
 
   const hasExistingConfig = !!(
@@ -131,7 +133,7 @@ export async function initCommand(options: InitOptions) {
     currentScore = baselineScore.score;
 
     if (failingChecks.length > 0) {
-      console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Targeted fixes\n'));
+      console.log(title.bold('  Step 3/4 — Targeted fixes\n'));
       console.log(chalk.dim(`  Score is ${baselineScore.score}/100 — only fixing ${failingChecks.length} remaining issue${failingChecks.length === 1 ? '' : 's'}:\n`));
       for (const check of failingChecks) {
         console.log(chalk.dim(`    • ${check.name}`));
@@ -139,11 +141,11 @@ export async function initCommand(options: InitOptions) {
       console.log('');
     }
   } else if (hasExistingConfig) {
-    console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Auditing your configs\n'));
+    console.log(title.bold('  Step 3/4 — Auditing your configs\n'));
     console.log(chalk.dim('  AI is reviewing your existing configs against your codebase'));
     console.log(chalk.dim('  and suggesting improvements.\n'));
   } else {
-    console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Generating configs\n'));
+    console.log(title.bold('  Step 3/4 — Generating configs\n'));
     console.log(chalk.dim('  AI is creating agent config files tailored to your project.\n'));
   }
   console.log(chalk.dim('  This can take a couple of minutes depending on your model and provider.\n'));
@@ -204,7 +206,7 @@ export async function initCommand(options: InitOptions) {
   printSetupSummary(generatedSetup);
 
   // Step 5: Accept / Refine / Decline with staging
-  console.log(chalk.hex('#6366f1').bold('  Step 4/4 — Review\n'));
+  console.log(title.bold('  Step 4/4 — Review\n'));
 
   const setupFiles = collectSetupFiles(generatedSetup);
   const staged = stageFiles(setupFiles, process.cwd());
@@ -354,7 +356,7 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim('  Run `caliber undo` to revert changes.\n'));
 
   console.log(chalk.bold('  Next steps:\n'));
-  console.log(`    ${chalk.hex('#6366f1')('caliber undo')}         Revert all changes from this run`);
+  console.log(`    ${title('caliber undo')}         Revert all changes from this run`);
   console.log('');
 }
 
