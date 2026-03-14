@@ -69,21 +69,15 @@ export function displayScore(result: ScoreResult): void {
 
   const agentLabel = result.targetAgent.map(a => AGENT_DISPLAY_NAMES[a] || a).join(' + ');
 
-  // Header box
+  // Header
   console.log('');
-  console.log(chalk.gray('  ╭───────────────────────────────────────────────────╮'));
-  console.log(chalk.gray('  │') + '                                                   ' + chalk.gray('│'));
-  console.log(
-    chalk.gray('  │') +
-    '   Agent Config Score' +
-    gc(`        ${String(result.score).padStart(3)} / ${result.maxScore}`) +
-    '    Grade ' + gc(result.grade) +
-    '   ' + chalk.gray('│')
-  );
-  console.log(chalk.gray('  │') + `   ${progressBar(result.score, result.maxScore)}   ` + chalk.gray('│'));
-  console.log(chalk.gray('  │') + chalk.dim(`   Target: ${agentLabel}`) + ' '.repeat(Math.max(1, 40 - agentLabel.length)) + chalk.gray('│'));
-  console.log(chalk.gray('  │') + '                                                   ' + chalk.gray('│'));
-  console.log(chalk.gray('  ╰───────────────────────────────────────────────────╯'));
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
+  console.log('');
+  console.log(`  ${chalk.bold('Agent Config Score')}    ${gc(chalk.bold(`${result.score} / ${result.maxScore}`))}    Grade ${gc(chalk.bold(result.grade))}`);
+  console.log(`  ${progressBar(result.score, result.maxScore)}`);
+  console.log(chalk.dim(`  Target: ${agentLabel}`));
+  console.log('');
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
   console.log('');
 
   // Category sections
@@ -147,46 +141,17 @@ export function displayScoreDelta(before: ScoreResult, after: ScoreResult): void
   const beforeGc = gradeColor(before.grade);
   const afterGc = gradeColor(after.grade);
 
-  const BOX_INNER = 51;
-
-  const scorePart = `Score: ${before.score} > ${after.score}`;
-  const deltaPart = `${deltaStr} pts`;
-  const gradePart = `${before.grade} > ${after.grade}`;
-  const contentLen = 3 + scorePart.length + deltaPart.length + gradePart.length + 8;
-  const totalPad = BOX_INNER - contentLen;
-  const pad1 = Math.max(2, Math.ceil(totalPad / 2));
-  const pad2 = Math.max(1, totalPad - pad1);
-
-  const scoreLineFormatted =
-    '   Score: ' +
-    beforeGc(`${before.score}`) +
-    chalk.gray(' \u2192 ') +
-    afterGc(`${after.score}`) +
-    ' '.repeat(pad1) +
-    deltaColor(deltaPart) +
-    ' '.repeat(pad2) +
-    beforeGc(before.grade) +
-    chalk.gray(' \u2192 ') +
-    afterGc(after.grade);
-
-  // Pad to exact box width: visible chars = scorePart + pad1 + deltaPart + pad2 + gradePart + 3 leading spaces
-  const visibleLen = 3 + scorePart.length + pad1 + deltaPart.length + pad2 + gradePart.length;
-  const trailingPad = Math.max(0, BOX_INNER - visibleLen);
-
-  const barWidth = Math.floor((BOX_INNER - 12) / 2);
-  const barLine =
-    `   ${progressBar(before.score, before.maxScore, barWidth)}` +
-    chalk.gray('  \u2192  ') +
-    progressBar(after.score, after.maxScore, barWidth) +
-    '   ';
-
   console.log('');
-  console.log(chalk.gray('  ╭' + '─'.repeat(BOX_INNER) + '╮'));
-  console.log(chalk.gray('  │') + ' '.repeat(BOX_INNER) + chalk.gray('│'));
-  console.log(chalk.gray('  │') + scoreLineFormatted + ' '.repeat(trailingPad) + chalk.gray('│'));
-  console.log(chalk.gray('  │') + barLine + chalk.gray('│'));
-  console.log(chalk.gray('  │') + ' '.repeat(BOX_INNER) + chalk.gray('│'));
-  console.log(chalk.gray('  ╰' + '─'.repeat(BOX_INNER) + '╯'));
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
+  console.log('');
+  console.log(
+    `  Score: ${beforeGc(`${before.score}`)} ${chalk.gray('\u2192')} ${afterGc(`${after.score}`)}` +
+    `    ${deltaColor(deltaStr + ' pts')}` +
+    `    ${beforeGc(before.grade)} ${chalk.gray('\u2192')} ${afterGc(after.grade)}`
+  );
+  console.log(`  ${progressBar(before.score, before.maxScore, 19)} ${chalk.gray('\u2192')} ${progressBar(after.score, after.maxScore, 19)}`);
+  console.log('');
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
   console.log('');
 
   // Show what improved
