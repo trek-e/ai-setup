@@ -381,7 +381,7 @@ export async function initCommand(options: InitOptions) {
 
   // Prompt user for auto-refresh hook preference
   console.log('');
-  console.log(title.bold('  Keep your configs fresh\n'));
+  console.log(title.bold('  Keep your setup up-to-date as your code evolve\n'));
   console.log(chalk.dim('  Caliber can automatically update your agent configs when your code changes.\n'));
   const hookChoice = await promptHookType(targetAgent);
   trackInitHookSelected(hookChoice);
@@ -636,7 +636,7 @@ async function promptHookType(targetAgent: TargetAgent): Promise<HookChoice> {
   choices.push({ name: 'Skip for now', value: 'skip' });
 
   return select({
-    message: 'How would you like to auto-refresh your docs?',
+    message: 'How would you like to auto-refresh your setup?',
     choices,
   });
 }
