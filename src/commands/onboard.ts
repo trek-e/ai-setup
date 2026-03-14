@@ -24,6 +24,7 @@ import { displayScoreSummary, displayScoreDelta } from '../scoring/display.js';
 import { readDismissedChecks, writeDismissedChecks } from '../scoring/dismissed.js';
 import type { DismissedCheck } from '../scoring/dismissed.js';
 import { discoverAndInstallMcps } from '../mcp/index.js';
+import { searchAndInstallSkills } from './recommend.js';
 import type { FailingCheck, PassingCheck } from '../ai/generate.js';
 
 type TargetAgent = ('claude' | 'cursor' | 'codex')[];
@@ -56,10 +57,11 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim('  2. Discover   Analyze your code, dependencies, and structure'));
   console.log(chalk.dim('  3. Generate   Create config files tailored to your project'));
   console.log(chalk.dim('  4. Review     Preview, refine, and apply the changes'));
-  console.log(chalk.dim('  5. Enhance    Discover MCP servers for your tools\n'));
+  console.log(chalk.dim('  5. Enhance    Discover MCP servers for your tools'));
+  console.log(chalk.dim('  6. Skills     Browse community skills for your stack\n'));
 
   // Step 1: Connect LLM provider
-  console.log(title.bold('  Step 1/5 — Connect your LLM\n'));
+  console.log(title.bold('  Step 1/6 — Connect your LLM\n'));
   let config = loadConfig();
   if (!config) {
     console.log(chalk.dim('  No LLM provider set yet. Choose how to run Caliber:\n'));
@@ -88,7 +90,7 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim(modelLine + '\n'));
 
   // Step 2: Discover project
-  console.log(title.bold('  Step 2/5 — Discover your project\n'));
+  console.log(title.bold('  Step 2/6 — Discover your project\n'));
   console.log(chalk.dim('  Learning about your languages, dependencies, structure, and existing configs.\n'));
   const spinner = ora('Analyzing project...').start();
   const fingerprint = collectFingerprint(process.cwd());
@@ -173,7 +175,7 @@ export async function initCommand(options: InitOptions) {
     currentScore = baselineScore.score;
 
     if (failingChecks.length > 0) {
-      console.log(title.bold('  Step 3/5 — Fine-tuning\n'));
+      console.log(title.bold('  Step 3/6 — Fine-tuning\n'));
       console.log(chalk.dim(`  Your setup scores ${baselineScore.score}/100 — fixing ${failingChecks.length} remaining issue${failingChecks.length === 1 ? '' : 's'}:\n`));
       for (const check of failingChecks) {
         console.log(chalk.dim(`    • ${check.name}`));
@@ -181,11 +183,11 @@ export async function initCommand(options: InitOptions) {
       console.log('');
     }
   } else if (hasExistingConfig) {
-    console.log(title.bold('  Step 3/5 — Improve your setup\n'));
+    console.log(title.bold('  Step 3/6 — Improve your setup\n'));
     console.log(chalk.dim('  Reviewing your existing configs against your codebase'));
     console.log(chalk.dim('  and preparing improvements.\n'));
   } else {
-    console.log(title.bold('  Step 3/5 — Build your agent setup\n'));
+    console.log(title.bold('  Step 3/6 — Build your agent setup\n'));
     console.log(chalk.dim('  Creating config files tailored to your project.\n'));
   }
   console.log(chalk.dim('  This can take a couple of minutes depending on your model and provider.\n'));
@@ -253,7 +255,7 @@ export async function initCommand(options: InitOptions) {
   });
 
   // Step 4: Review and apply
-  console.log(title.bold('  Step 4/5 — Review and apply\n'));
+  console.log(title.bold('  Step 4/6 — Review and apply\n'));
 
   const setupFiles = collectSetupFiles(generatedSetup);
   const staged = stageFiles(setupFiles, process.cwd());
@@ -331,7 +333,7 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Step 5: MCP Server Discovery
-  console.log(title.bold('\n  Step 5/5 — Enhance with MCP servers\n'));
+  console.log(title.bold('\n  Step 5/6 — Enhance with MCP servers\n'));
   console.log(chalk.dim('  MCP servers connect your AI agents to external tools and services'));
   console.log(chalk.dim('  like databases, APIs, and platforms your project depends on.\n'));
 
@@ -421,12 +423,37 @@ export async function initCommand(options: InitOptions) {
 
   displayScoreDelta(baselineScore, afterScore);
 
+  // Step 6: Community skills
+  console.log(title.bold('\n  Step 6/6 — Community skills\n'));
+  console.log(chalk.dim('  Search public skill registries for skills that match your tech stack.\n'));
+
+  const wantsSkills = await select({
+    message: 'Search public repos for relevant skills to add to this project?',
+    choices: [
+      { name: 'Yes, find skills for my project', value: true },
+      { name: 'Skip for now', value: false },
+    ],
+  });
+
+  if (wantsSkills) {
+    try {
+      await searchAndInstallSkills();
+    } catch (err) {
+      if ((err as Error).message !== '__exit__') {
+        console.log(chalk.dim('  Skills search failed: ' + ((err as Error).message || 'unknown error')));
+      }
+      console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber skills') + chalk.dim(' later to try again.\n'));
+    }
+  } else {
+    console.log(chalk.dim('  Skipped. Run ') + chalk.hex('#83D1EB')('caliber skills') + chalk.dim(' later to browse.\n'));
+  }
+
   console.log(chalk.bold.green('  Onboarding complete! Your project is ready for AI-assisted development.'));
   console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber undo') + chalk.dim(' to revert changes.\n'));
 
   console.log(chalk.bold('  Next steps:\n'));
   console.log(`    ${title('caliber score')}        See your full config breakdown`);
-  console.log(`    ${title('caliber recommend')}    Discover community skills for your stack`);
+  console.log(`    ${title('caliber skills')}         Discover community skills for your stack`);
   console.log(`    ${title('caliber undo')}         Revert all changes from this run`);
   console.log('');
 }

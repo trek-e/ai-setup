@@ -24,7 +24,7 @@ describe('cli command registration', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         'onboard', 'undo', 'status', 'regenerate',
-        'config', 'recommend', 'score',
+        'config', 'skills', 'score',
         'refresh', 'hooks', 'learn',
       ])
     );

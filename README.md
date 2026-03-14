@@ -70,7 +70,7 @@ If these files already exist, Caliber audits them against your actual codebase a
 |---------|-------------|
 | `caliber onboard` | Onboard your project for AI-assisted development |
 | `caliber score` | Score your config quality (deterministic, no LLM needed) |
-| `caliber recommend` | Discover and install skills from [skills.sh](https://skills.sh) |
+| `caliber skills` | Discover and install community skills for your project |
 | `caliber config` | Configure LLM provider, API key, and model |
 
 ```bash

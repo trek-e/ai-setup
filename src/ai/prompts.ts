@@ -63,11 +63,23 @@ AgentSetup schema:
 
 Do NOT generate mcpServers — MCP configuration is managed separately.
 
-All skills follow the OpenSkills standard (agentskills.io):
-- The "name" field must be kebab-case (lowercase letters, numbers, hyphens only). It becomes the directory name.
-- The "description" field should describe what the skill does AND when to use it — this drives automatic skill discovery by agents.
-- The "content" field is the markdown body only — do NOT include YAML frontmatter in the content, it will be generated from the name and description fields.
-- Keep skill content under 500 lines. Move detailed references to separate files if needed.
+All skills follow the OpenSkills standard (agentskills.io). Anthropic's official skill guide defines three levels of progressive disclosure:
+- Level 1 (YAML frontmatter): Always loaded. Must have enough info for the agent to decide when to activate the skill.
+- Level 2 (SKILL.md body): Loaded when the skill is relevant. Contains full instructions.
+- Level 3 (references/): Only loaded on demand for deep detail.
+
+Skill field requirements:
+- "name": kebab-case (lowercase letters, numbers, hyphens only). Becomes the directory name.
+- "description": MUST include WHAT it does + WHEN to use it with specific trigger phrases. Example: "Manages database migrations. Use when user says 'run migration', 'create migration', 'db schema change', or modifies files in db/migrations/."
+- "content": markdown body only — do NOT include YAML frontmatter, it is generated from name+description.
+
+Skill content structure — follow this template:
+1. A heading with the skill name
+2. "## Instructions" — clear, numbered steps. Be specific: include exact commands, file paths, parameter names.
+3. "## Examples" — at least one example showing: User says → Actions taken → Result
+4. "## Troubleshooting" (optional) — common errors and how to fix them
+
+Keep skill content under 200 lines. Focus on actionable instructions, not documentation prose.
 
 The "fileDescriptions" object MUST include a one-liner for every file that will be created or modified. Use actual file paths as keys (e.g. "CLAUDE.md", "AGENTS.md", ".claude/skills/my-skill/SKILL.md", ".agents/skills/my-skill/SKILL.md", ".cursor/skills/my-skill/SKILL.md", ".cursor/rules/my-rule.mdc"). Each description should explain why the change is needed, be concise and lowercase.
 

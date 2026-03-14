@@ -79,9 +79,8 @@ program
   .action(configCommand);
 
 program
-  .command('recommend')
-  .description('Discover and install skill recommendations')
-  .option('--generate', 'Force fresh recommendation search')
+  .command('skills')
+  .description('Discover and install community skills for your project')
   .action(recommendCommand);
 
 program

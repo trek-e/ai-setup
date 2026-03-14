@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import ora from 'ora';
+import select from '@inquirer/select';
 import { mkdirSync, readFileSync, readdirSync, existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { collectFingerprint } from '../fingerprint/index.js';
@@ -335,10 +336,24 @@ function extractTopDeps(): string[] {
 
 // --- Main command ---
 
-export async function recommendCommand(options: {
-  generate?: boolean;
-  status?: string;
-}) {
+export async function recommendCommand() {
+  const proceed = await select({
+    message: 'Search public repos for relevant skills to add to this project?',
+    choices: [
+      { name: 'Yes, find skills for my project', value: true },
+      { name: 'No, cancel', value: false },
+    ],
+  });
+
+  if (!proceed) {
+    console.log(chalk.dim('  Cancelled.\n'));
+    return;
+  }
+
+  await searchAndInstallSkills();
+}
+
+export async function searchAndInstallSkills(): Promise<void> {
   const fingerprint = collectFingerprint(process.cwd());
   const platforms = detectLocalPlatforms();
   const installedSkills = getInstalledSkills();
@@ -430,7 +445,7 @@ export async function recommendCommand(options: {
 
 async function interactiveSelect(recs: SkillResult[]): Promise<SkillResult[] | null> {
   if (!process.stdin.isTTY) {
-    printRecommendations(recs);
+    printSkills(recs);
     return null;
   }
 
@@ -442,7 +457,7 @@ async function interactiveSelect(recs: SkillResult[]): Promise<SkillResult[] | n
 
   function render(): string {
     const lines: string[] = [];
-    lines.push(chalk.bold('  Recommendations'));
+    lines.push(chalk.bold('  Skills'));
     lines.push('');
 
     if (hasScores) {
@@ -615,10 +630,10 @@ async function installSkills(recs: SkillResult[], platforms: Platform[], content
   console.log('');
 }
 
-function printRecommendations(recs: SkillResult[]) {
+function printSkills(recs: SkillResult[]) {
   const hasScores = recs.some(r => r.score > 0);
 
-  console.log(chalk.bold('\n  Recommendations\n'));
+  console.log(chalk.bold('\n  Skills\n'));
 
   if (hasScores) {
     console.log(`  ${chalk.dim('Score'.padEnd(7))} ${chalk.dim('Name'.padEnd(28))} ${chalk.dim('Why')}`);
