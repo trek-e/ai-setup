@@ -467,11 +467,6 @@ const LIMITS = {
   SKILLS_MAX: 10,
   SKILL_CHARS: 3000,
   RULES_MAX: 10,
-  CONFIG_FILES_MAX: 20,
-  CONFIG_FILE_CHARS: 5000,
-  ROUTES_MAX: 100,
-  FILE_SUMMARIES_MAX: 200,
-  FILE_CONTENT_CHARS: 8000,
 } as const;
 
 function truncate(text: string, maxChars: number): string {
@@ -585,56 +580,21 @@ export function buildGeneratePrompt(
   if (fingerprint.codeAnalysis) {
     const ca = fingerprint.codeAnalysis;
 
-    if (ca.configFiles.length > 0) {
-      parts.push('\n--- Project Config Files ---');
-      for (const cfg of ca.configFiles.slice(0, LIMITS.CONFIG_FILES_MAX)) {
-        parts.push(`\n[${cfg.path}]\n${truncate(cfg.content, LIMITS.CONFIG_FILE_CHARS)}`);
-      }
-    }
-
-    const allRoutes = ca.fileSummaries
-      .filter((f) => f.routes.length > 0)
-      .flatMap((f) => f.routes.map((r) => `${r}  (${f.path})`));
-    if (allRoutes.length > 0) {
-      parts.push('\n--- API Routes ---');
-      for (const route of allRoutes.slice(0, LIMITS.ROUTES_MAX)) {
-        parts.push(`- ${route}`);
-      }
-      if (allRoutes.length > LIMITS.ROUTES_MAX) {
-        parts.push(`(${allRoutes.length - LIMITS.ROUTES_MAX} more routes omitted)`);
-      }
-    }
-
-    // Source files with full content (for pattern extraction)
-    const filesWithContent = ca.fileSummaries.filter(f => f.content);
-    const filesWithoutContent = ca.fileSummaries.filter(f => !f.content);
-
-    if (filesWithContent.length > 0) {
-      parts.push('\n--- Source Files (full content — use these to extract patterns for skills) ---');
-      for (const f of filesWithContent.slice(0, LIMITS.FILE_SUMMARIES_MAX)) {
-        parts.push(`\n[${f.path}] (${f.language})`);
-        parts.push(truncate(f.content!, LIMITS.FILE_CONTENT_CHARS));
-      }
-    }
-
-    if (filesWithoutContent.length > 0) {
-      parts.push('\n--- Source File Summaries ---');
-      for (const f of filesWithoutContent.slice(0, LIMITS.FILE_SUMMARIES_MAX)) {
-        const sections: string[] = [`[${f.path}] (${f.language})`];
-        if (f.imports.length > 0) sections.push(`  imports: ${f.imports.slice(0, 10).join('; ')}`);
-        if (f.exports.length > 0) sections.push(`  exports: ${f.exports.slice(0, 10).join(', ')}`);
-        if (f.functions.length > 0) sections.push(`  functions: ${f.functions.slice(0, 10).join(', ')}`);
-        if (f.classes.length > 0) sections.push(`  classes: ${f.classes.join(', ')}`);
-        if (f.types.length > 0) sections.push(`  types: ${f.types.slice(0, 10).join(', ')}`);
-        parts.push(sections.join('\n'));
-      }
-      if (filesWithoutContent.length > LIMITS.FILE_SUMMARIES_MAX) {
-        parts.push(`\n(${filesWithoutContent.length - LIMITS.FILE_SUMMARIES_MAX} more files omitted)`);
-      }
-    }
-
     if (ca.truncated) {
-      parts.push('\n(Code analysis was truncated due to size limits — not all files are shown.)');
+      const pct = ca.totalProjectTokens > 0
+        ? Math.round((ca.includedTokens / ca.totalProjectTokens) * 100)
+        : 100;
+      parts.push(`\n--- Project Files (trimmed to ~${ca.includedTokens.toLocaleString()}/${ca.totalProjectTokens.toLocaleString()} tokens, ${pct}% of total) ---`);
+    } else {
+      parts.push(`\n--- Project Files (${ca.files.length} files, ~${ca.includedTokens.toLocaleString()} tokens) ---`);
+    }
+
+    parts.push('Study these files to extract patterns for skills. Use the exact code patterns you see here.\n');
+
+    for (const f of ca.files) {
+      parts.push(`[${f.path}]`);
+      parts.push(f.content);
+      parts.push('');
     }
   }
 

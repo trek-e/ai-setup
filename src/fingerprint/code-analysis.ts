@@ -4,164 +4,112 @@ import path from 'path';
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', '.next', 'dist', 'build', '.cache',
   '.turbo', 'coverage', '.caliber', '__pycache__', '.venv',
-  'vendor', 'target',
+  'venv', 'env', 'vendor', 'target', '.parcel-cache', '.nyc_output',
+  '.claude', '.cursor', '.agents', '.codex',
 ]);
 
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py']);
-
-const CONFIG_FILE_NAMES = new Set([
-  'package.json',
-  'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml',
-  'Makefile', 'tsconfig.json', 'pyproject.toml', 'turbo.json',
-  'requirements.txt', 'go.mod', 'Cargo.toml', 'Gemfile',
-  'next.config.js', 'next.config.mjs', 'next.config.ts',
-  'vite.config.ts', 'vite.config.js', 'vite.config.mjs',
-  'drizzle.config.ts', 'drizzle.config.js',
-  'jest.config.ts', 'jest.config.js', 'jest.config.mjs',
-  'vitest.config.ts', 'vitest.config.js', 'vitest.config.mts',
-  'alembic.ini', 'setup.cfg', 'tox.ini',
+const TEXT_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+  '.py', '.pyw',
+  '.go', '.rs', '.rb', '.java', '.kt', '.scala', '.cs',
+  '.c', '.cpp', '.h', '.hpp',
+  '.swift', '.m',
+  '.php', '.lua', '.r', '.jl', '.ex', '.exs', '.erl', '.hs',
+  '.sh', '.bash', '.zsh', '.fish',
+  '.sql', '.graphql', '.gql', '.prisma',
+  '.html', '.css', '.scss', '.sass', '.less', '.svelte', '.vue', '.astro',
+  '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.env',
+  '.xml', '.plist',
+  '.md', '.mdx', '.txt', '.rst',
+  '.tf', '.hcl',
+  '.proto',
+  '.mdc',
 ]);
 
-const CONFIG_GLOBS_DIRS: Array<{ dir: string; pattern: RegExp }> = [
-  { dir: '.github/workflows', pattern: /\.ya?ml$/ },
+const SKIP_FILES = new Set([
+  'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
+  'Cargo.lock', 'Gemfile.lock', 'poetry.lock', 'composer.lock',
+  '.DS_Store', 'Thumbs.db',
+]);
+
+const SKIP_PATTERNS = [
+  /\.min\.(js|css)$/,
+  /\.bundle\.(js|css)$/,
+  /\.map$/,
+  /\.d\.ts$/,
+  /\.generated\./,
+  /\.snap$/,
 ];
 
-const TOTAL_BUDGET = 600_000; // ~150K tokens
-const CONFIG_BUDGET = Math.floor(TOTAL_BUDGET * 0.15); // 90K chars for config files
-const SOURCE_BUDGET = Math.floor(TOTAL_BUDGET * 0.85); // 510K chars for source code
+// 180K tokens ≈ 720K chars
+const TOKEN_BUDGET = 180_000;
+const CHAR_BUDGET = TOKEN_BUDGET * 4;
 
-export interface FileSummary {
-  path: string;
-  language: 'ts' | 'js' | 'py';
-  imports: string[];
-  exports: string[];
-  functions: string[];
-  classes: string[];
-  types: string[];
-  routes: string[];
-  content?: string;
-}
-
-export interface ConfigFileContent {
+export interface ProjectFile {
   path: string;
   content: string;
+  size: number;
 }
 
 export interface CodeAnalysis {
-  fileSummaries: FileSummary[];
-  configFiles: ConfigFileContent[];
+  files: ProjectFile[];
   truncated: boolean;
+  totalProjectTokens: number;
+  includedTokens: number;
 }
 
 export function analyzeCode(dir: string): CodeAnalysis {
-  const sourceFiles: string[] = [];
-  const configFiles: ConfigFileContent[] = [];
+  const allFiles: string[] = [];
+  walkDir(dir, '', 0, 10, allFiles);
+  sortByPriority(allFiles);
 
-  walkDir(dir, '', 0, 10, sourceFiles, configFiles, dir);
-
-  sortByPriority(sourceFiles);
-
-  let configChars = 0;
-  const trimmedConfigs: ConfigFileContent[] = [];
-  for (const cfg of configFiles) {
-    const size = cfg.path.length + cfg.content.length;
-    if (configChars + size > CONFIG_BUDGET) break;
-    trimmedConfigs.push(cfg);
-    configChars += size;
-  }
-
-  let sourceChars = 0;
+  let totalChars = 0;
+  let includedChars = 0;
   let truncated = false;
-  const fileSummaries: FileSummary[] = [];
+  const files: ProjectFile[] = [];
 
-  // Phase 1: Include full content for high-priority files (entry points, routes, schemas)
-  // Phase 2: Include summaries only for remaining files
-  const MAX_CONTENT_LINE_COUNT = 300;
-  const CONTENT_BUDGET = Math.floor(SOURCE_BUDGET * 0.75);
-  const SUMMARY_BUDGET = SOURCE_BUDGET - CONTENT_BUDGET;
-
-  // Phase 1 — full content for priority files
-  for (const relPath of sourceFiles) {
-    const fullPath = path.join(dir, relPath);
-    let fileContent: string;
+  // First pass: count total project size
+  const fileSizes = new Map<string, number>();
+  for (const relPath of allFiles) {
     try {
-      fileContent = fs.readFileSync(fullPath, 'utf-8');
+      const stat = fs.statSync(path.join(dir, relPath));
+      fileSizes.set(relPath, stat.size);
+      totalChars += stat.size;
+    } catch { /* skip */ }
+  }
+
+  // Second pass: include files until budget is reached
+  for (const relPath of allFiles) {
+    const fullPath = path.join(dir, relPath);
+    let content: string;
+    try {
+      content = fs.readFileSync(fullPath, 'utf-8');
     } catch {
       continue;
     }
 
-    const lineCount = fileContent.split('\n').length;
-    if (lineCount > MAX_CONTENT_LINE_COUNT) continue;
+    // Skip files over 500 lines (likely generated or data files)
+    if (content.split('\n').length > 500) continue;
 
-    const ext = path.extname(relPath);
-    const language = resolveLanguage(ext);
-    if (!language) continue;
-
-    const summary = language === 'py'
-      ? extractPython(relPath, fileContent)
-      : extractTypeScriptJavaScript(relPath, fileContent, language);
-
-    summary.content = fileContent;
-    const entrySize = estimateSummarySize(summary) + fileContent.length;
-
-    if (sourceChars + entrySize > CONTENT_BUDGET) {
-      // Switch to summary-only mode for remaining files
+    const entrySize = relPath.length + content.length + 10; // overhead for formatting
+    if (includedChars + entrySize > CHAR_BUDGET) {
       truncated = true;
-      break;
+      continue; // try smaller files
     }
 
-    fileSummaries.push(summary);
-    sourceChars += entrySize;
+    files.push({ path: relPath, content, size: content.length });
+    includedChars += entrySize;
   }
 
-  // Phase 2 — summaries only for remaining files
-  const processedPaths = new Set(fileSummaries.map(f => f.path));
-  let summaryChars = 0;
-
-  for (const relPath of sourceFiles) {
-    if (processedPaths.has(relPath)) continue;
-
-    const fullPath = path.join(dir, relPath);
-    let fileContent: string;
-    try {
-      fileContent = fs.readFileSync(fullPath, 'utf-8');
-    } catch {
-      continue;
-    }
-
-    const lineCount = fileContent.split('\n').length;
-    if (lineCount > 1000) continue;
-
-    const ext = path.extname(relPath);
-    const language = resolveLanguage(ext);
-    if (!language) continue;
-
-    const summary = language === 'py'
-      ? extractPython(relPath, fileContent)
-      : extractTypeScriptJavaScript(relPath, fileContent, language);
-
-    const summarySize = estimateSummarySize(summary);
-    if (summaryChars + summarySize > SUMMARY_BUDGET) {
-      truncated = true;
-      break;
-    }
-
-    fileSummaries.push(summary);
-    summaryChars += summarySize;
-  }
-
-  return { fileSummaries, configFiles: trimmedConfigs, truncated };
+  return {
+    files,
+    truncated,
+    totalProjectTokens: Math.ceil(totalChars / 4),
+    includedTokens: Math.ceil(includedChars / 4),
+  };
 }
 
-function walkDir(
-  base: string,
-  rel: string,
-  depth: number,
-  maxDepth: number,
-  sourceFiles: string[],
-  configFiles: ConfigFileContent[],
-  rootDir: string
-) {
+function walkDir(base: string, rel: string, depth: number, maxDepth: number, files: string[]) {
   if (depth > maxDepth) return;
   const fullPath = path.join(base, rel);
   let entries: fs.Dirent[];
@@ -178,209 +126,44 @@ function walkDir(
     const relPath = rel ? `${rel}/${entry.name}` : entry.name;
 
     if (entry.isDirectory()) {
-      const matchedGlobDir = CONFIG_GLOBS_DIRS.find(
-        (g) => relPath === g.dir || relPath.endsWith(`/${g.dir}`)
-      );
-      if (matchedGlobDir) {
-        collectConfigsFromDir(base, relPath, matchedGlobDir.pattern, configFiles);
-      }
-      walkDir(base, relPath, depth + 1, maxDepth, sourceFiles, configFiles, rootDir);
-    } else {
-      if (CONFIG_FILE_NAMES.has(entry.name)) {
-        try {
-          const content = fs.readFileSync(path.join(base, relPath), 'utf-8');
-          configFiles.push({ path: relPath, content });
-        } catch {}
-      }
+      walkDir(base, relPath, depth + 1, maxDepth, files);
+    } else if (entry.isFile()) {
+      if (SKIP_FILES.has(entry.name)) continue;
+      if (SKIP_PATTERNS.some(p => p.test(entry.name))) continue;
 
-      const ext = path.extname(entry.name);
-      if (SOURCE_EXTENSIONS.has(ext) && !entry.name.endsWith('.d.ts')) {
-        sourceFiles.push(relPath);
+      const ext = path.extname(entry.name).toLowerCase();
+      // Include known text extensions, plus extensionless files in root (Makefile, Dockerfile, etc.)
+      if (TEXT_EXTENSIONS.has(ext) || (depth === 0 && !ext && !entry.name.startsWith('.'))) {
+        files.push(relPath);
       }
-    }
-  }
-}
-
-function collectConfigsFromDir(
-  base: string,
-  relDir: string,
-  pattern: RegExp,
-  configFiles: ConfigFileContent[]
-) {
-  const fullDir = path.join(base, relDir);
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(fullDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.isFile() && pattern.test(entry.name)) {
-      const relPath = `${relDir}/${entry.name}`;
-      try {
-        const content = fs.readFileSync(path.join(base, relPath), 'utf-8');
-        configFiles.push({ path: relPath, content });
-      } catch {}
     }
   }
 }
 
 function sortByPriority(files: string[]) {
-  const entryPointNames = new Set(['index.ts', 'index.js', 'main.py', 'app.ts', 'app.js', 'server.ts', 'server.js']);
-  const routePattern = /(route|api|controller)/i;
-  const schemaPattern = /(types|schema|models)/i;
-  const servicePattern = /(service|lib|utils)/i;
-  const testPattern = /(test|spec|__tests__)/i;
+  const entryPointNames = new Set([
+    'index.ts', 'index.js', 'index.tsx', 'index.jsx',
+    'main.ts', 'main.py', 'main.go', 'main.rs',
+    'app.ts', 'app.js', 'app.py', 'server.ts', 'server.js',
+    'mod.rs', 'lib.rs',
+  ]);
+
+  const configPattern = /\.(json|ya?ml|toml|ini|cfg|env)$|config\.|Makefile|Dockerfile/i;
+  const routePattern = /(route|api|controller|endpoint|handler)/i;
+  const schemaPattern = /(types|schema|models|entities|migration)/i;
+  const servicePattern = /(service|lib|utils|helper|middleware)/i;
+  const testPattern = /(test|spec|__tests__|_test\.|\.test\.)/i;
 
   function priority(filePath: string): number {
     const base = path.basename(filePath);
     if (entryPointNames.has(base)) return 0;
-    if (routePattern.test(filePath)) return 1;
-    if (schemaPattern.test(filePath)) return 2;
-    if (servicePattern.test(filePath)) return 3;
-    if (testPattern.test(filePath)) return 5;
-    return 4;
+    if (configPattern.test(filePath)) return 1;
+    if (routePattern.test(filePath)) return 2;
+    if (schemaPattern.test(filePath)) return 3;
+    if (servicePattern.test(filePath)) return 4;
+    if (testPattern.test(filePath)) return 6;
+    return 5;
   }
 
   files.sort((a, b) => priority(a) - priority(b));
-}
-
-function resolveLanguage(ext: string): 'ts' | 'js' | 'py' | null {
-  if (ext === '.ts' || ext === '.tsx') return 'ts';
-  if (ext === '.js' || ext === '.jsx') return 'js';
-  if (ext === '.py') return 'py';
-  return null;
-}
-
-function extractTypeScriptJavaScript(
-  filePath: string,
-  content: string,
-  language: 'ts' | 'js'
-): FileSummary {
-  const lines = content.split('\n');
-  const imports: string[] = [];
-  const exports: string[] = [];
-  const functions: string[] = [];
-  const classes: string[] = [];
-  const types: string[] = [];
-  const routes: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (/^import\s+/.test(trimmed)) {
-      imports.push(trimmed);
-      continue;
-    }
-
-    const exportMatch = trimmed.match(
-      /^export\s+(?:default\s+)?(?:async\s+)?(function|const|class|interface|type|enum)\s+(\w+)/
-    );
-    if (exportMatch) {
-      exports.push(`${exportMatch[1]} ${exportMatch[2]}`);
-      if (exportMatch[1] === 'class') classes.push(exportMatch[2]);
-      if (exportMatch[1] === 'interface' || exportMatch[1] === 'type') types.push(exportMatch[2]);
-      if (exportMatch[1] === 'function') functions.push(exportMatch[2]);
-      continue;
-    }
-
-    const fnMatch = trimmed.match(/^(?:async\s+)?function\s+(\w+)/);
-    if (fnMatch && !trimmed.startsWith('export')) {
-      functions.push(fnMatch[1]);
-      continue;
-    }
-
-    const arrowMatch = trimmed.match(/^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(/);
-    if (arrowMatch && !exports.some((e) => e.endsWith(arrowMatch[1]))) {
-      functions.push(arrowMatch[1]);
-    }
-
-    const classMatch = trimmed.match(/^class\s+(\w+)/);
-    if (classMatch && !trimmed.startsWith('export')) {
-      classes.push(classMatch[1]);
-      continue;
-    }
-
-    const ifaceMatch = trimmed.match(/^(?:interface|type)\s+(\w+)/);
-    if (ifaceMatch && !trimmed.startsWith('export')) {
-      types.push(ifaceMatch[1]);
-      continue;
-    }
-
-    const routeMatch = trimmed.match(
-      /(?:router|app|server)\.(get|post|put|patch|delete|all|use)\s*\(\s*['"`]([^'"`]+)['"`]/
-    );
-    if (routeMatch) {
-      routes.push(`${routeMatch[1].toUpperCase()} ${routeMatch[2]}`);
-    }
-  }
-
-  return { path: filePath, language, imports, exports, functions, classes, types, routes };
-}
-
-function extractPython(filePath: string, content: string): FileSummary {
-  const lines = content.split('\n');
-  const imports: string[] = [];
-  const functions: string[] = [];
-  const classes: string[] = [];
-  const routes: string[] = [];
-
-  let prevLine = '';
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (/^import\s+/.test(trimmed) || /^from\s+/.test(trimmed)) {
-      imports.push(trimmed);
-      continue;
-    }
-
-    const defMatch = trimmed.match(/^def\s+(\w+)\s*\(([^)]*)\)/);
-    if (defMatch) {
-      functions.push(`${defMatch[1]}(${defMatch[2]})`);
-    }
-
-    const classMatch = trimmed.match(/^class\s+(\w+)/);
-    if (classMatch) {
-      classes.push(classMatch[1]);
-    }
-
-    const decoratorRoute = prevLine.match(
-      /@(?:app|router)\.(get|post|put|patch|delete|options|head)\s*\(\s*['"]([^'"]+)['"]/
-    );
-    if (decoratorRoute && defMatch) {
-      routes.push(`${decoratorRoute[1].toUpperCase()} ${decoratorRoute[2]}`);
-    }
-
-    const includeRouter = trimmed.match(
-      /include_router\s*\([^,]+,\s*prefix\s*=\s*['"]([^'"]+)['"]/
-    );
-    if (includeRouter) {
-      routes.push(`ROUTER ${includeRouter[1]}`);
-    }
-
-    prevLine = trimmed;
-  }
-
-  return {
-    path: filePath,
-    language: 'py',
-    imports,
-    exports: [],
-    functions,
-    classes,
-    types: [],
-    routes,
-  };
-}
-
-function estimateSummarySize(summary: FileSummary): number {
-  return (
-    summary.path.length +
-    summary.imports.reduce((s, i) => s + i.length, 0) +
-    summary.exports.reduce((s, e) => s + e.length, 0) +
-    summary.functions.reduce((s, f) => s + f.length, 0) +
-    summary.classes.reduce((s, c) => s + c.length, 0) +
-    summary.types.reduce((s, t) => s + t.length, 0) +
-    summary.routes.reduce((s, r) => s + r.length, 0)
-  );
 }

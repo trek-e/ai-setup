@@ -7,7 +7,7 @@ vi.mock('../git.js', () => ({ getGitRemoteUrl: () => 'https://github.com/test/re
 vi.mock('../file-tree.js', () => ({ getFileTree: () => ['src/index.ts', 'package.json'] }));
 vi.mock('../existing-config.js', () => ({ readExistingConfigs: () => ({}) }));
 vi.mock('../code-analysis.js', () => ({
-  analyzeCode: () => ({ fileSummaries: [], configFiles: [], truncated: false }),
+  analyzeCode: () => ({ files: [], truncated: false, totalProjectTokens: 0, includedTokens: 0 }),
 }));
 vi.mock('../../ai/detect.js', () => ({
   detectProjectStack: vi.fn().mockResolvedValue({ languages: [], frameworks: [], tools: [] }),
@@ -79,6 +79,6 @@ describe('collectFingerprint', () => {
     expect(fp.gitRemoteUrl).toBe('https://github.com/test/repo');
     expect(fp.fileTree).toEqual(['src/index.ts', 'package.json']);
     expect(fp.existingConfigs).toEqual({});
-    expect(fp.codeAnalysis).toEqual({ fileSummaries: [], configFiles: [], truncated: false });
+    expect(fp.codeAnalysis).toEqual({ files: [], truncated: false, totalProjectTokens: 0, includedTokens: 0 });
   });
 });

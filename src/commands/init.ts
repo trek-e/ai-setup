@@ -132,7 +132,7 @@ export async function initCommand(options: InitOptions) {
   spinner.succeed('Project analyzed');
   log(options.verbose, `Fingerprint: ${fingerprint.languages.length} languages, ${fingerprint.frameworks.length} frameworks, ${fingerprint.fileTree.length} files`);
   if (options.verbose && fingerprint.codeAnalysis) {
-    log(options.verbose, `Code analysis: ${fingerprint.codeAnalysis.fileSummaries.length} file summaries, ${fingerprint.codeAnalysis.configFiles.length} config files`);
+    log(options.verbose, `Code analysis: ${fingerprint.codeAnalysis.files.length} files, ~${fingerprint.codeAnalysis.includedTokens.toLocaleString()} tokens${fingerprint.codeAnalysis.truncated ? ` (trimmed from ~${fingerprint.codeAnalysis.totalProjectTokens.toLocaleString()})` : ''}`);
   }
 
   trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
