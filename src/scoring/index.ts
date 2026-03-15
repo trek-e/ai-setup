@@ -2,15 +2,21 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { checkExistence } from './checks/existence.js';
 import { checkQuality } from './checks/quality.js';
-import { checkCoverage } from './checks/coverage.js';
+import { checkGrounding } from './checks/grounding.js';
 import { checkAccuracy } from './checks/accuracy.js';
 import { checkFreshness } from './checks/freshness.js';
 import { checkBonus } from './checks/bonus.js';
-import { computeGrade, CURSOR_ONLY_CHECKS, CLAUDE_ONLY_CHECKS, CODEX_ONLY_CHECKS, BOTH_ONLY_CHECKS } from './constants.js';
+import { computeGrade, CURSOR_ONLY_CHECKS, CLAUDE_ONLY_CHECKS, CODEX_ONLY_CHECKS, BOTH_ONLY_CHECKS, NON_CODEX_CHECKS } from './constants.js';
 import { getDismissedIds } from './dismissed.js';
 
 export type TargetAgent = ('claude' | 'cursor' | 'codex')[];
-export type CheckCategory = 'existence' | 'quality' | 'coverage' | 'accuracy' | 'freshness' | 'bonus';
+export type CheckCategory = 'existence' | 'quality' | 'grounding' | 'accuracy' | 'freshness' | 'bonus';
+
+export interface CheckFix {
+  readonly action: string;
+  readonly data: Record<string, unknown>;
+  readonly instruction: string;
+}
 
 export interface Check {
   readonly id: string;
@@ -21,6 +27,7 @@ export interface Check {
   readonly passed: boolean;
   readonly detail: string;
   readonly suggestion?: string;
+  readonly fix?: CheckFix;
 }
 
 export interface CategorySummary {
@@ -36,7 +43,7 @@ export interface ScoreResult {
   readonly categories: {
     readonly existence: CategorySummary;
     readonly quality: CategorySummary;
-    readonly coverage: CategorySummary;
+    readonly grounding: CategorySummary;
     readonly accuracy: CategorySummary;
     readonly freshness: CategorySummary;
     readonly bonus: CategorySummary;
@@ -59,6 +66,7 @@ function filterChecksForTarget(checks: Check[], target: TargetAgent): Check[] {
     if (CURSOR_ONLY_CHECKS.has(c.id)) return target.includes('cursor');
     if (CODEX_ONLY_CHECKS.has(c.id)) return target.includes('codex');
     if (BOTH_ONLY_CHECKS.has(c.id)) return target.includes('claude') && target.includes('cursor');
+    if (NON_CODEX_CHECKS.has(c.id)) return !target.includes('codex');
     return true;
   });
 }
@@ -87,7 +95,7 @@ export function computeLocalScore(dir: string, targetAgent?: TargetAgent): Score
   const allChecks: Check[] = [
     ...checkExistence(dir),
     ...checkQuality(dir),
-    ...checkCoverage(dir),
+    ...checkGrounding(dir),
     ...checkAccuracy(dir),
     ...checkFreshness(dir),
     ...checkBonus(dir),
@@ -111,7 +119,7 @@ export function computeLocalScore(dir: string, targetAgent?: TargetAgent): Score
     categories: {
       existence: sumCategory(checks, 'existence'),
       quality: sumCategory(checks, 'quality'),
-      coverage: sumCategory(checks, 'coverage'),
+      grounding: sumCategory(checks, 'grounding'),
       accuracy: sumCategory(checks, 'accuracy'),
       freshness: sumCategory(checks, 'freshness'),
       bonus: sumCategory(checks, 'bonus'),

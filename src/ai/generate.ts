@@ -33,9 +33,16 @@ function isTransientError(error: Error): boolean {
   return TRANSIENT_ERRORS.some(e => msg.includes(e.toLowerCase()));
 }
 
+export interface FailingCheckFix {
+  action: string;
+  data: Record<string, unknown>;
+  instruction: string;
+}
+
 export interface FailingCheck {
   name: string;
   suggestion?: string;
+  fix?: FailingCheckFix;
 }
 
 export interface PassingCheck {
@@ -492,9 +499,20 @@ export function buildGeneratePrompt(
 
   if (isTargetedFix) {
     parts.push(`TARGETED FIX MODE — current score: ${currentScore}/100, target: ${targetAgent}`);
-    parts.push(`\nThe existing config is already high quality. ONLY fix these specific failing checks:`);
+    parts.push(`\nThe existing config is already high quality. ONLY fix these specific failing checks:\n`);
     for (const check of failingChecks) {
-      parts.push(`- ${check.name}${check.suggestion ? `: ${check.suggestion}` : ''}`);
+      if (check.fix) {
+        parts.push(`- **${check.name}**`);
+        parts.push(`  Action: ${check.fix.instruction}`);
+        if (check.fix.data && Object.keys(check.fix.data).length > 0) {
+          const dataStr = Object.entries(check.fix.data)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
+            .join('; ');
+          parts.push(`  Data: ${dataStr}`);
+        }
+      } else {
+        parts.push(`- ${check.name}${check.suggestion ? `: ${check.suggestion}` : ''}`);
+      }
     }
     if (passingChecks && passingChecks.length > 0) {
       parts.push(`\nThese checks are currently PASSING — do NOT break them:`);
@@ -507,9 +525,10 @@ export function buildGeneratePrompt(
 - Do NOT rewrite, restructure, rephrase, or make cosmetic changes.
 - Preserve the existing content as-is except for targeted fixes.
 - If a skill file is not related to a failing check, return it EXACTLY as-is, character for character.
-- For "Documented commands exist": DELETE the specific invalid commands listed in the suggestion. Do NOT replace them with other commands unless you are 100% certain they exist.
-- For "Documented paths exist": DELETE the specific non-existent paths listed in the suggestion. Do NOT replace them with guessed paths.
-- For "Concise context files": Remove the least important lines to get under the line limit. Do NOT add new content.`);
+- For reference accuracy issues: DELETE non-existent paths. Do NOT replace with guessed paths.
+- For concise config issues: Remove the least important lines to get under the token limit. Do NOT add new content.
+- For grounding issues: Add references to the listed project directories in the appropriate sections.
+- Every path or name you reference MUST exist in the project — use the file tree provided below.`);
   } else if (hasExistingConfigs) {
     parts.push(`Audit and improve the existing coding agent configuration for target: ${targetAgent}`);
   } else {

@@ -251,7 +251,7 @@ export async function initCommand(options: InitOptions) {
 
   if (hasExistingConfig && baselineScore.score >= 95 && !options.force) {
     failingChecks = llmFixableChecks
-      .map(c => ({ name: c.name, suggestion: c.suggestion }));
+      .map(c => ({ name: c.name, suggestion: c.suggestion, fix: c.fix }));
     passingChecks = baselineScore.checks
       .filter(c => c.passed)
       .map(c => ({ name: c.name }));
@@ -359,7 +359,7 @@ export async function initCommand(options: InitOptions) {
           const polishResult = await generateSetup(
             fingerprint, targetAgent, undefined,
             { onStatus: () => {}, onComplete: () => {}, onError: () => {} },
-            inlineFailingChecks.map(c => ({ name: c.name, suggestion: c.suggestion })),
+            inlineFailingChecks.map(c => ({ name: c.name, suggestion: c.suggestion, fix: c.fix })),
             inlineScore.score,
             inlineScore.checks.filter(c => c.passed).map(c => ({ name: c.name })),
             { skipSkills: true, forceTargetedFix: true },
@@ -468,8 +468,10 @@ export async function initCommand(options: InitOptions) {
       if (agentsStub) {
         const setup = generatedSetup as Record<string, unknown>;
         setup.codex = { agentsMd: agentsStub.content };
-        if (!setup.targetAgent || !(setup.targetAgent as string[]).includes('codex')) {
-          (setup.targetAgent as string[]).push('codex');
+        if (!setup.targetAgent) {
+          setup.targetAgent = ['codex'];
+        } else if (Array.isArray(setup.targetAgent) && !setup.targetAgent.includes('codex')) {
+          setup.targetAgent.push('codex');
         }
       }
     }

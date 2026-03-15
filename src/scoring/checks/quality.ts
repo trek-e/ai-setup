@@ -2,29 +2,23 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { Check } from '../index.js';
 import {
-  POINTS_HAS_COMMANDS,
-  POINTS_NOT_BLOATED,
-  POINTS_NO_VAGUE,
+  POINTS_EXECUTABLE_CONTENT,
+  POINTS_CONCISE_CONFIG,
+  POINTS_CONCRETENESS,
   POINTS_NO_DIR_TREE,
   POINTS_NO_DUPLICATES,
-  POINTS_NO_CONTRADICTIONS,
-  BLOAT_THRESHOLDS,
-  COMMAND_PATTERNS,
-  VAGUE_PATTERNS,
-  CONTRADICTION_PAIRS,
+  POINTS_HAS_STRUCTURE,
+  TOKEN_BUDGET_THRESHOLDS,
+  CODE_BLOCK_THRESHOLDS,
+  CONCRETENESS_THRESHOLDS,
 } from '../constants.js';
-
-function readFileOrNull(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
-function countLines(content: string): number {
-  return content.split('\n').length;
-}
+import {
+  readFileOrNull,
+  collectAllConfigContent,
+  estimateTokens,
+  analyzeMarkdownStructure,
+  classifyLine,
+} from '../utils.js';
 
 export function checkQuality(dir: string): Check[] {
   const checks: Check[] = [];
@@ -33,99 +27,125 @@ export function checkQuality(dir: string): Check[] {
   const cursorrules = readFileOrNull(join(dir, '.cursorrules'));
   const agentsMd = readFileOrNull(join(dir, 'AGENTS.md'));
 
-  // All context files for aggregate checks
   const allContent = [claudeMd, cursorrules, agentsMd].filter(Boolean) as string[];
   const combinedContent = allContent.join('\n');
+  const primaryInstructions = claudeMd ?? agentsMd ?? cursorrules;
 
-  // Primary instructions file (CLAUDE.md, fallback to AGENTS.md for Codex users)
-  const primaryInstructions = claudeMd ?? agentsMd;
+  // 1. Executable content — does the config have code blocks?
+  const structure = primaryInstructions
+    ? analyzeMarkdownStructure(primaryInstructions)
+    : null;
 
-  // 1. Has build/test/lint commands
-  const hasCommands = primaryInstructions
-    ? COMMAND_PATTERNS.some((p) => p.test(primaryInstructions))
-    : false;
-  const matchedCommands = primaryInstructions
-    ? COMMAND_PATTERNS.filter((p) => p.test(primaryInstructions)).map((p) => {
-        const m = primaryInstructions.match(p);
-        return m ? m[0] : '';
-      }).filter(Boolean)
-    : [];
-  checks.push({
-    id: 'has_commands',
-    name: 'Build/test/lint commands',
-    category: 'quality',
-    maxPoints: POINTS_HAS_COMMANDS,
-    earnedPoints: hasCommands ? POINTS_HAS_COMMANDS : 0,
-    passed: hasCommands,
-    detail: hasCommands
-      ? `Found: ${matchedCommands.slice(0, 3).join(', ')}`
-      : primaryInstructions
-        ? 'No build/test/lint commands detected'
-        : 'No instructions file to check',
-    suggestion: hasCommands
-      ? undefined
-      : 'Add build, test, and lint commands to your instructions file',
-  });
-
-  // 2. Not bloated (token budget)
-  const primaryFile = claudeMd ?? agentsMd ?? cursorrules;
-  const primaryName = claudeMd ? 'CLAUDE.md' : agentsMd ? 'AGENTS.md' : cursorrules ? '.cursorrules' : null;
-  let bloatPoints = 0;
-  let lineCount = 0;
-
-  if (primaryFile) {
-    lineCount = countLines(primaryFile);
-    const threshold = BLOAT_THRESHOLDS.find((t) => lineCount <= t.maxLines);
-    bloatPoints = threshold ? threshold.points : 0;
-  } else {
-    // No file = no bloat issue but also no points (handled by existence checks)
-    bloatPoints = POINTS_NOT_BLOATED;
-  }
+  const codeBlockCount = structure?.codeBlockCount ?? 0;
+  const codeBlockThreshold = CODE_BLOCK_THRESHOLDS.find(t => codeBlockCount >= t.minBlocks);
+  const execPoints = codeBlockThreshold?.points ?? 0;
 
   checks.push({
-    id: 'not_bloated',
-    name: 'Concise context files',
+    id: 'has_executable_content',
+    name: 'Executable content (code blocks)',
     category: 'quality',
-    maxPoints: POINTS_NOT_BLOATED,
-    earnedPoints: bloatPoints,
-    passed: bloatPoints >= 6,
-    detail: primaryName
-      ? `${primaryName}: ${lineCount} lines`
-      : 'No context files to measure',
-    suggestion:
-      bloatPoints < POINTS_NOT_BLOATED && primaryName
-        ? `${primaryName} is ${lineCount} lines — must be ≤150 lines for full points (currently losing ${POINTS_NOT_BLOATED - bloatPoints} pts)`
-        : undefined,
+    maxPoints: POINTS_EXECUTABLE_CONTENT,
+    earnedPoints: execPoints,
+    passed: execPoints >= 6,
+    detail: primaryInstructions
+      ? `${codeBlockCount} code block${codeBlockCount === 1 ? '' : 's'} found`
+      : 'No instructions file to check',
+    suggestion: execPoints < 6
+      ? 'Add code blocks with project commands, build steps, and common workflows'
+      : undefined,
+    fix: execPoints < 6
+      ? {
+          action: 'add_code_blocks',
+          data: { currentCount: codeBlockCount, targetCount: 3 },
+          instruction: `Add code blocks with executable commands. Currently ${codeBlockCount}, need at least 3 for full points.`,
+        }
+      : undefined,
   });
 
-  // 3. No vague instructions
-  const vagueMatches: Array<{ pattern: string; line: number }> = [];
-  if (combinedContent) {
-    const lines = combinedContent.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      for (const pattern of VAGUE_PATTERNS) {
-        if (pattern.test(lines[i])) {
-          vagueMatches.push({ pattern: lines[i].trim(), line: i + 1 });
-          break; // one match per line is enough
+  // 2. Concise config — total token budget across all config files
+  const totalContent = collectAllConfigContent(dir);
+  const totalTokens = estimateTokens(totalContent);
+  const tokenThreshold = TOKEN_BUDGET_THRESHOLDS.find(t => totalTokens <= t.maxTokens);
+  const tokenPoints = totalContent.length === 0
+    ? POINTS_CONCISE_CONFIG
+    : tokenThreshold?.points ?? 0;
+
+  checks.push({
+    id: 'concise_config',
+    name: 'Concise config (token budget)',
+    category: 'quality',
+    maxPoints: POINTS_CONCISE_CONFIG,
+    earnedPoints: tokenPoints,
+    passed: tokenPoints >= 4,
+    detail: totalContent.length === 0
+      ? 'No config files to measure'
+      : `~${totalTokens} tokens total across all config files`,
+    suggestion: tokenPoints < 4 && totalContent.length > 0
+      ? `Total config is ~${totalTokens} tokens — reduce to under 5000 for better agent performance`
+      : undefined,
+    fix: tokenPoints < 4 && totalContent.length > 0
+      ? {
+          action: 'reduce_size',
+          data: { currentTokens: totalTokens, targetTokens: 5000 },
+          instruction: `Reduce total config from ~${totalTokens} tokens to under 5000.`,
+        }
+      : undefined,
+  });
+
+  // 3. Concreteness — ratio of concrete lines vs abstract prose
+  let concreteCount = 0;
+  let abstractCount = 0;
+  const abstractExamples: string[] = [];
+
+  if (primaryInstructions) {
+    let inCodeBlock = false;
+    for (const line of primaryInstructions.split('\n')) {
+      if (line.trim().startsWith('```')) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+
+      const classification = classifyLine(line, inCodeBlock);
+      if (classification === 'neutral') continue;
+
+      if (classification === 'concrete') {
+        concreteCount++;
+      } else {
+        abstractCount++;
+        if (abstractExamples.length < 3) {
+          abstractExamples.push(line.trim().slice(0, 80));
         }
       }
     }
   }
+
+  const totalMeaningful = concreteCount + abstractCount;
+  const concreteRatio = totalMeaningful > 0 ? concreteCount / totalMeaningful : 1;
+  const concretenessThreshold = CONCRETENESS_THRESHOLDS.find(t => concreteRatio >= t.minRatio);
+  const concretenessPoints = totalMeaningful === 0
+    ? 0
+    : concretenessThreshold?.points ?? 0;
+
   checks.push({
-    id: 'no_vague_instructions',
-    name: 'No vague instructions',
+    id: 'concreteness',
+    name: 'Concrete instructions',
     category: 'quality',
-    maxPoints: POINTS_NO_VAGUE,
-    earnedPoints: vagueMatches.length === 0 ? POINTS_NO_VAGUE : 0,
-    passed: vagueMatches.length === 0,
-    detail:
-      vagueMatches.length === 0
-        ? 'All instructions are specific and actionable'
-        : `${vagueMatches.length} vague instruction${vagueMatches.length === 1 ? '' : 's'} found`,
-    suggestion:
-      vagueMatches.length > 0
-        ? `Replace "${vagueMatches[0].pattern.slice(0, 50)}" (line ${vagueMatches[0].line}) with specific, measurable guidance`
-        : undefined,
+    maxPoints: POINTS_CONCRETENESS,
+    earnedPoints: concretenessPoints,
+    passed: concretenessPoints >= 3,
+    detail: totalMeaningful === 0
+      ? 'No content to analyze'
+      : `${Math.round(concreteRatio * 100)}% of lines reference specific files, paths, or code`,
+    suggestion: concretenessPoints < 3 && totalMeaningful > 0
+      ? `${abstractCount} lines are generic prose — replace with specific instructions referencing project files`
+      : undefined,
+    fix: concretenessPoints < 3 && totalMeaningful > 0
+      ? {
+          action: 'replace_vague',
+          data: { abstractLines: abstractExamples, abstractCount, concreteCount, ratio: Math.round(concreteRatio * 100) },
+          instruction: `Replace generic prose with specific references. Examples of vague lines: ${abstractExamples.join('; ')}`,
+        }
+      : undefined,
   });
 
   // 4. No directory tree listings
@@ -159,27 +179,26 @@ export function checkQuality(dir: string): Check[] {
     suggestion: hasLargeTree
       ? 'Remove directory tree listings — agents discover project structure by reading code'
       : undefined,
+    fix: hasLargeTree
+      ? {
+          action: 'remove_tree',
+          data: { treeLines: treeLineCount },
+          instruction: 'Remove directory tree listings from code blocks. Reference key directories inline instead.',
+        }
+      : undefined,
   });
 
   // 5. No duplicate content across files
   let duplicatePercent = 0;
   if (claudeMd && cursorrules) {
     const claudeLines = new Set(
-      claudeMd
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.length > 10)
+      claudeMd.split('\n').map(l => l.trim()).filter(l => l.length > 10),
     );
-    const cursorLines = cursorrules
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 10);
-
-    const overlapping = cursorLines.filter((l) => claudeLines.has(l)).length;
-    duplicatePercent =
-      cursorLines.length > 0
-        ? Math.round((overlapping / cursorLines.length) * 100)
-        : 0;
+    const cursorLines = cursorrules.split('\n').map(l => l.trim()).filter(l => l.length > 10);
+    const overlapping = cursorLines.filter(l => claudeLines.has(l)).length;
+    duplicatePercent = cursorLines.length > 0
+      ? Math.round((overlapping / cursorLines.length) * 100)
+      : 0;
   }
 
   const hasDuplicates = duplicatePercent > 50;
@@ -190,51 +209,47 @@ export function checkQuality(dir: string): Check[] {
     maxPoints: POINTS_NO_DUPLICATES,
     earnedPoints: hasDuplicates ? 0 : POINTS_NO_DUPLICATES,
     passed: !hasDuplicates,
-    detail:
-      claudeMd && cursorrules
-        ? hasDuplicates
-          ? `${duplicatePercent}% overlap between CLAUDE.md and .cursorrules`
-          : `${duplicatePercent}% overlap — acceptable`
-        : 'Only one context file (no duplication possible)',
+    detail: claudeMd && cursorrules
+      ? hasDuplicates
+        ? `${duplicatePercent}% overlap between CLAUDE.md and .cursorrules`
+        : `${duplicatePercent}% overlap — acceptable`
+      : 'Only one context file (no duplication possible)',
     suggestion: hasDuplicates
       ? 'CLAUDE.md and .cursorrules share >50% content — deduplicate to save tokens'
       : undefined,
+    fix: hasDuplicates
+      ? {
+          action: 'deduplicate',
+          data: { overlapPercent: duplicatePercent },
+          instruction: 'Deduplicate content between CLAUDE.md and .cursorrules. Each file should contain platform-specific instructions only.',
+        }
+      : undefined,
   });
 
-  // 6. No contradictions
-  const contradictions: string[] = [];
-  if (allContent.length >= 2) {
-    for (const pair of CONTRADICTION_PAIRS) {
-      const fileA = allContent.find((c) => pair.a.test(c));
-      const fileB = allContent.find((c) => pair.b.test(c));
-      if (fileA && fileB && fileA !== fileB) {
-        contradictions.push(`"${pair.a.source}" vs "${pair.b.source}"`);
-      }
-    }
-  }
+  // 6. Has structure — markdown headings and sections
+  const structureScore = structure
+    ? (structure.h2Count >= 3 ? 1 : 0) + (structure.listItemCount >= 3 ? 1 : 0)
+    : 0;
 
-  // Also check within a single file for contradictions
-  for (const content of allContent) {
-    for (const pair of CONTRADICTION_PAIRS) {
-      if (pair.a.test(content) && pair.b.test(content)) {
-        contradictions.push(`Same file contains "${pair.a.source}" and "${pair.b.source}"`);
-      }
-    }
-  }
-
-  const hasContradictions = contradictions.length > 0;
   checks.push({
-    id: 'no_contradictions',
-    name: 'No contradictions',
+    id: 'has_structure',
+    name: 'Structured with headings',
     category: 'quality',
-    maxPoints: POINTS_NO_CONTRADICTIONS,
-    earnedPoints: hasContradictions ? 0 : POINTS_NO_CONTRADICTIONS,
-    passed: !hasContradictions,
-    detail: hasContradictions
-      ? `${contradictions.length} contradiction${contradictions.length === 1 ? '' : 's'} found`
-      : 'No conflicting instructions detected',
-    suggestion: hasContradictions
-      ? `Contradiction: ${contradictions[0]}. Remove or rephrase one of the conflicting statements.`
+    maxPoints: POINTS_HAS_STRUCTURE,
+    earnedPoints: primaryInstructions ? structureScore : 0,
+    passed: structureScore >= 2,
+    detail: primaryInstructions
+      ? `${structure!.h2Count} sections, ${structure!.listItemCount} list items`
+      : 'No instructions file to check',
+    suggestion: structureScore < 2 && primaryInstructions
+      ? 'Add at least 3 markdown sections (##) and use lists for multi-item instructions'
+      : undefined,
+    fix: structureScore < 2 && primaryInstructions
+      ? {
+          action: 'add_structure',
+          data: { currentH2: structure!.h2Count, currentLists: structure!.listItemCount },
+          instruction: 'Organize content into sections with ## headings and use bullet lists for instructions.',
+        }
       : undefined,
   });
 

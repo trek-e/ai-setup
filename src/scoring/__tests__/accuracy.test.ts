@@ -1,108 +1,81 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import { checkAccuracy } from '../checks/accuracy.js';
-import * as fs from 'fs';
-
-vi.mock('fs');
-
-const mockFs = vi.mocked(fs);
-
-function setupFs(files: Record<string, string>) {
-  mockFs.existsSync.mockImplementation((path: fs.PathLike) => {
-    return String(path) in files;
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mockFs.readFileSync.mockImplementation(((path: fs.PathLike) => {
-    const content = files[String(path)];
-    if (content === undefined) throw new Error(`ENOENT: ${path}`);
-    return content;
-  }) as any);
-  mockFs.readdirSync.mockReturnValue([]);
-  mockFs.statSync.mockImplementation((path: fs.PathLike) => {
-    if (String(path) in files) {
-      return { mtime: new Date() } as fs.Stats;
-    }
-    throw new Error(`ENOENT: ${path}`);
-  });
-}
 
 describe('checkAccuracy', () => {
+  let dir: string;
+
   beforeEach(() => {
-    vi.restoreAllMocks();
+    dir = mkdtempSync(join(tmpdir(), 'caliber-accuracy-'));
   });
 
-  it('validates documented npm commands against package.json scripts', () => {
-    setupFs({
-      '/project/package.json': JSON.stringify({
-        scripts: { build: 'tsc', test: 'vitest', dev: 'tsx watch' },
-      }),
-      '/project/CLAUDE.md': '## Commands\n```\nnpm run build\nnpm test\nnpm run dev\n```',
-    });
-
-    const checks = checkAccuracy('/project');
-    const cmdCheck = checks.find(c => c.id === 'commands_valid');
-    expect(cmdCheck?.passed).toBe(true);
-    expect(cmdCheck?.detail).toContain('3/3');
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
   });
 
-  it('detects invalid commands not in package.json', () => {
-    setupFs({
-      '/project/package.json': JSON.stringify({
-        scripts: { build: 'tsc' },
-      }),
-      '/project/CLAUDE.md': '## Commands\n```\nnpm run build\nnpm run deploy\nnpm run migrate\n```',
-    });
+  it('validates that referenced paths exist on disk', () => {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'index.ts'), '');
+    writeFileSync(join(dir, 'src', 'utils.ts'), '');
 
-    const checks = checkAccuracy('/project');
-    const cmdCheck = checks.find(c => c.id === 'commands_valid');
-    expect(cmdCheck?.passed).toBe(false);
-    expect(cmdCheck?.suggestion).toContain('deploy');
+    writeFileSync(
+      join(dir, 'CLAUDE.md'),
+      'Key files:\n- `src/index.ts`\n- `src/utils.ts`',
+    );
+
+    const checks = checkAccuracy(dir);
+    const refCheck = checks.find(c => c.id === 'references_valid');
+    expect(refCheck?.earnedPoints).toBeGreaterThan(0);
+    expect(refCheck?.passed).toBe(true);
   });
 
-  it('validates documented file paths exist on disk', () => {
-    setupFs({
-      '/project/CLAUDE.md': 'Key files:\n- `src/index.ts`\n- `src/lib/auth.ts`\n- `src/missing/gone.ts`',
-      '/project/src/index.ts': '',
-      '/project/src/lib/auth.ts': '',
-    });
+  it('detects invalid path references', () => {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'index.ts'), '');
 
-    const checks = checkAccuracy('/project');
-    const pathCheck = checks.find(c => c.id === 'paths_valid');
-    expect(pathCheck?.detail).toContain('2/3');
-    expect(pathCheck?.suggestion).toContain('src/missing/gone.ts');
+    writeFileSync(
+      join(dir, 'CLAUDE.md'),
+      'Key files:\n- `src/index.ts`\n- `src/missing.ts`\n- `src/gone/file.ts`',
+    );
+
+    const checks = checkAccuracy(dir);
+    const refCheck = checks.find(c => c.id === 'references_valid');
+    expect(refCheck?.fix).toBeDefined();
+    expect(refCheck?.fix?.data.invalid).toBeDefined();
+    const invalid = refCheck?.fix?.data.invalid as string[];
+    expect(invalid.some(p => p.includes('missing') || p.includes('gone'))).toBe(true);
   });
 
-  it('scores full points when no CLAUDE.md exists', () => {
-    setupFs({
-      '/project/package.json': JSON.stringify({ scripts: {} }),
-    });
+  it('scores 0 when no references exist (not full points)', () => {
+    writeFileSync(join(dir, 'CLAUDE.md'), '# Project\n\nJust some text without any paths.');
 
-    const checks = checkAccuracy('/project');
-    const cmdCheck = checks.find(c => c.id === 'commands_valid');
-    expect(cmdCheck?.passed).toBe(true); // nothing to validate = no problem
+    const checks = checkAccuracy(dir);
+    const refCheck = checks.find(c => c.id === 'references_valid');
+    expect(refCheck?.passed).toBe(false);
+    expect(refCheck?.earnedPoints).toBe(0);
   });
 
-  it('detects config drift when code is newer than config', () => {
-    const now = Date.now();
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+  it('skips URLs and glob patterns', () => {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'main.ts'), '');
 
-    mockFs.existsSync.mockReturnValue(true);
-    mockFs.readFileSync.mockReturnValue('');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockFs.readdirSync.mockImplementation(((path: fs.PathLike) => {
-      if (String(path).includes('src')) return ['index.ts'] as unknown as fs.Dirent[];
-      return [];
-    }) as any);
-    mockFs.statSync.mockImplementation((path: fs.PathLike) => {
-      const p = String(path);
-      if (p.includes('CLAUDE.md') || p.includes('.cursorrules')) {
-        return { mtime: new Date(thirtyDaysAgo) } as fs.Stats;
-      }
-      return { mtime: new Date(now) } as fs.Stats;
-    });
+    writeFileSync(
+      join(dir, 'CLAUDE.md'),
+      'See https://example.com/docs for more.\nEntry: `src/main.ts`\nPattern: `*.test.ts`',
+    );
 
-    const checks = checkAccuracy('/project');
-    const driftCheck = checks.find(c => c.id === 'config_drift');
-    expect(driftCheck?.passed).toBe(false);
-    expect(driftCheck?.detail).toContain('30');
+    const checks = checkAccuracy(dir);
+    const refCheck = checks.find(c => c.id === 'references_valid');
+    // Only src/main.ts should be validated, URL and glob should be skipped
+    expect(refCheck?.detail).toContain('1/1');
+  });
+
+  it('handles missing CLAUDE.md gracefully', () => {
+    const checks = checkAccuracy(dir);
+    const refCheck = checks.find(c => c.id === 'references_valid');
+    expect(refCheck).toBeDefined();
+    expect(refCheck?.earnedPoints).toBe(0);
   });
 });

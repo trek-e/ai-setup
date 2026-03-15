@@ -10,13 +10,13 @@ const AGENT_DISPLAY_NAMES: Record<string, string> = {
 const CATEGORY_LABELS: Record<CheckCategory, string> = {
   existence: 'FILES & SETUP',
   quality: 'QUALITY',
-  coverage: 'COVERAGE',
+  grounding: 'GROUNDING',
   accuracy: 'ACCURACY',
   freshness: 'FRESHNESS & SAFETY',
   bonus: 'BONUS',
 };
 
-const CATEGORY_ORDER: CheckCategory[] = ['existence', 'quality', 'coverage', 'accuracy', 'freshness', 'bonus'];
+const CATEGORY_ORDER: CheckCategory[] = ['existence', 'quality', 'grounding', 'accuracy', 'freshness', 'bonus'];
 
 function gradeColor(grade: string): (text: string) => string {
   switch (grade) {

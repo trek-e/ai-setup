@@ -42,7 +42,7 @@ function makeScoreResult(overrides: Partial<ScoreResult>): ScoreResult {
     categories: {
       existence: { earned: 0, max: 25 },
       quality: { earned: 0, max: 25 },
-      coverage: { earned: 0, max: 20 },
+      grounding: { earned: 0, max: 20 },
       accuracy: { earned: 0, max: 15 },
       freshness: { earned: 0, max: 10 },
       bonus: { earned: 0, max: 5 },
@@ -262,7 +262,7 @@ describe('displayScore', () => {
     const output = logs.join('\n');
     expect(output).toContain('FILES & SETUP');
     expect(output).toContain('QUALITY');
-    expect(output).toContain('COVERAGE');
+    expect(output).toContain('GROUNDING');
     expect(output).toContain('ACCURACY');
     expect(output).toContain('FRESHNESS & SAFETY');
     expect(output).toContain('BONUS');

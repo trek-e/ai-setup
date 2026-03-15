@@ -1,110 +1,60 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync } from 'fs';
+import { execSync } from 'child_process';
 import { join } from 'path';
 import type { Check } from '../index.js';
 import {
-  POINTS_COMMANDS_VALID,
-  POINTS_PATHS_VALID,
+  POINTS_REFERENCES_VALID,
   POINTS_CONFIG_DRIFT,
 } from '../constants.js';
+import {
+  collectAllConfigContent,
+  extractReferences,
+} from '../utils.js';
 
-function readFileOrNull(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
-function readJsonOrNull(path: string): Record<string, unknown> | null {
-  const content = readFileOrNull(path);
-  if (!content) return null;
-  try {
-    return JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-/** Extract npm scripts from package.json. */
-function getPackageScripts(dir: string): Set<string> {
-  const pkg = readJsonOrNull(join(dir, 'package.json'));
-  if (!pkg?.scripts) return new Set();
-  return new Set(Object.keys(pkg.scripts as Record<string, string>));
-}
-
-/** Extract commands documented in CLAUDE.md and check if they're valid. */
-function validateDocumentedCommands(dir: string): {
+/**
+ * Check if file paths and references in config actually exist on disk.
+ * Universal — works for any project regardless of tech stack.
+ */
+function validateReferences(dir: string): {
   valid: string[];
   invalid: string[];
   total: number;
 } {
-  const claudeMd = readFileOrNull(join(dir, 'CLAUDE.md'));
-  if (!claudeMd) return { valid: [], invalid: [], total: 0 };
+  const configContent = collectAllConfigContent(dir);
+  if (!configContent) return { valid: [], invalid: [], total: 0 };
 
-  const scripts = getPackageScripts(dir);
+  const refs = extractReferences(configContent);
   const valid: string[] = [];
   const invalid: string[] = [];
 
-  // Match npm/yarn/pnpm/bun run commands — strip trailing markdown backticks/punctuation
-  const cmdPattern = /(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?([a-zA-Z0-9_:@./-]+)/g;
-  const seen = new Set<string>();
+  for (const ref of refs) {
+    // Skip obvious non-path references (URLs, semver, etc.)
+    if (/^https?:\/\//.test(ref)) continue;
+    if (/^\d+\.\d+/.test(ref)) continue;
+    if (ref.startsWith('#')) continue;
+    if (ref.startsWith('@')) continue;
 
-  let match: RegExpExecArray | null;
-  while ((match = cmdPattern.exec(claudeMd)) !== null) {
-    const scriptName = match[1].replace(/[.,;:!?)]+$/, '');
-    if (seen.has(scriptName)) continue;
-    seen.add(scriptName);
+    // Skip glob patterns (*.ts, **/*.js)
+    if (ref.includes('*')) continue;
 
-    // Built-in npm commands that don't need to be in scripts
-    const builtins = new Set(['install', 'ci', 'test', 'start', 'init', 'publish', 'pack', 'link', 'uninstall']);
-    if (builtins.has(scriptName)) {
-      // 'test' and 'start' should be in scripts if documented
-      if ((scriptName === 'test' || scriptName === 'start') && !scripts.has(scriptName)) {
-        invalid.push(`${match[0]} (no "${scriptName}" script in package.json)`);
-      } else {
-        valid.push(match[0]);
-      }
-      continue;
-    }
+    // Skip git range patterns (origin/main..HEAD, commit1..commit2)
+    if (ref.includes('..')) continue;
 
-    if (scripts.has(scriptName)) {
-      valid.push(match[0]);
+    // Skip references that don't have a clear directory component
+    // (single-segment names like "commander" aren't path references)
+    if (!ref.includes('/') && !ref.includes('.')) continue;
+
+    // Check if the reference exists on disk
+    const fullPath = join(dir, ref);
+    if (existsSync(fullPath)) {
+      valid.push(ref);
     } else {
-      invalid.push(`${match[0]} (no "${scriptName}" script in package.json)`);
-    }
-  }
-
-  // Also check for npx commands referencing tools
-  const npxPattern = /npx\s+(\S+)/g;
-  while ((match = npxPattern.exec(claudeMd)) !== null) {
-    const tool = match[1];
-    if (seen.has(`npx-${tool}`)) continue;
-    seen.add(`npx-${tool}`);
-    // npx commands are generally valid, just count them
-    valid.push(match[0]);
-  }
-
-  // Check make targets
-  const makePattern = /make\s+(\S+)/g;
-  if (existsSync(join(dir, 'Makefile'))) {
-    const makefile = readFileOrNull(join(dir, 'Makefile'));
-    const makeTargets = new Set<string>();
-    if (makefile) {
-      for (const line of makefile.split('\n')) {
-        const targetMatch = line.match(/^([a-zA-Z_-]+)\s*:/);
-        if (targetMatch) makeTargets.add(targetMatch[1]);
-      }
-    }
-
-    while ((match = makePattern.exec(claudeMd)) !== null) {
-      const target = match[1];
-      if (seen.has(`make-${target}`)) continue;
-      seen.add(`make-${target}`);
-
-      if (makeTargets.has(target)) {
-        valid.push(match[0]);
+      // Try without trailing extension variations
+      const withoutTrailing = ref.replace(/\/+$/, '');
+      if (withoutTrailing !== ref && existsSync(join(dir, withoutTrailing))) {
+        valid.push(ref);
       } else {
-        invalid.push(`${match[0]} (no "${target}" target in Makefile)`);
+        invalid.push(ref);
       }
     }
   }
@@ -112,152 +62,137 @@ function validateDocumentedCommands(dir: string): {
   return { valid, invalid, total: valid.length + invalid.length };
 }
 
-/** Check if file paths mentioned in CLAUDE.md actually exist. */
-function validateDocumentedPaths(dir: string): {
-  valid: string[];
-  invalid: string[];
-  total: number;
+/**
+ * Detect config drift using git history — how many source commits
+ * have happened since the last config file commit.
+ */
+function detectGitDrift(dir: string): {
+  commitsSinceConfigUpdate: number;
+  lastConfigCommit: string | null;
+  isGitRepo: boolean;
 } {
-  const claudeMd = readFileOrNull(join(dir, 'CLAUDE.md'));
-  if (!claudeMd) return { valid: [], invalid: [], total: 0 };
-
-  const valid: string[] = [];
-  const invalid: string[] = [];
-
-  // Match file paths that look like src/..., lib/..., app/..., etc.
-  // Be conservative: only match paths that look like real file references
-  const pathPattern = /(?:^|\s|`|"|')((src|lib|app|apps|packages|cmd|internal|test|tests|scripts|config|public|pages|components|routes|services|middleware|utils|helpers)\/[a-zA-Z0-9_./-]+\.[a-zA-Z]{1,5})/gm;
-
-  const seen = new Set<string>();
-  let match: RegExpExecArray | null;
-
-  while ((match = pathPattern.exec(claudeMd)) !== null) {
-    const filePath = match[1];
-    if (seen.has(filePath)) continue;
-    seen.add(filePath);
-
-    // Skip obvious example/placeholder paths
-    if (/\/path\/to\/|\/example[s]?\/|\/your[_-]|\/foo\/|\/bar\//.test(filePath)) continue;
-
-    if (existsSync(join(dir, filePath))) {
-      valid.push(filePath);
-    } else {
-      invalid.push(filePath);
-    }
+  try {
+    // Check if we're in a git repo
+    execSync('git rev-parse --git-dir', { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch {
+    return { commitsSinceConfigUpdate: 0, lastConfigCommit: null, isGitRepo: false };
   }
 
-  return { valid, invalid, total: valid.length + invalid.length };
-}
+  const configFiles = ['CLAUDE.md', 'AGENTS.md', '.cursorrules', '.cursor/rules'];
 
-/** Detect config drift: source files changed more recently than config files. */
-function detectConfigDrift(dir: string): {
-  driftDays: number;
-  srcLastModified: Date | null;
-  configLastModified: Date | null;
-} {
-  const srcDirs = ['src', 'lib', 'app', 'cmd', 'internal', 'pages', 'components'];
-  let latestSrcMtime = 0;
-
-  for (const srcDir of srcDirs) {
-    const fullPath = join(dir, srcDir);
-    if (!existsSync(fullPath)) continue;
-
+  // Find the most recent commit that touched any config file
+  let latestConfigCommitHash: string | null = null;
+  for (const file of configFiles) {
     try {
-      const files = readdirSync(fullPath, { recursive: true })
-        .map(String)
-        .filter(f => /\.(ts|js|tsx|jsx|py|go|rs|java|rb)$/.test(f));
+      const hash = execSync(
+        `git log -1 --format=%H -- "${file}"`,
+        { cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+      ).trim();
+      if (!hash) continue;
 
-      for (const file of files.slice(0, 100)) { // sample up to 100 files
+      if (!latestConfigCommitHash) {
+        latestConfigCommitHash = hash;
+      } else {
         try {
-          const stat = statSync(join(fullPath, file));
-          if (stat.mtime.getTime() > latestSrcMtime) {
-            latestSrcMtime = stat.mtime.getTime();
-          }
-        } catch { /* skip */ }
+          // Exit code 0 means latestConfigCommitHash IS an ancestor of hash → hash is newer
+          execSync(
+            `git merge-base --is-ancestor ${latestConfigCommitHash} ${hash}`,
+            { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] },
+          );
+          latestConfigCommitHash = hash;
+        } catch {
+          // Not an ancestor — keep the existing latestConfigCommitHash
+        }
       }
-    } catch { /* dir doesn't exist */ }
+    } catch {
+      // File might not exist in git history, or merge-base check says it's not an ancestor
+    }
   }
 
-  const configFiles = ['CLAUDE.md', '.cursorrules'];
-  let latestConfigMtime = 0;
-
-  for (const configFile of configFiles) {
-    try {
-      const stat = statSync(join(dir, configFile));
-      if (stat.mtime.getTime() > latestConfigMtime) {
-        latestConfigMtime = stat.mtime.getTime();
-      }
-    } catch { /* file doesn't exist */ }
+  if (!latestConfigCommitHash) {
+    return { commitsSinceConfigUpdate: 0, lastConfigCommit: null, isGitRepo: true };
   }
 
-  if (latestSrcMtime === 0 || latestConfigMtime === 0) {
-    return { driftDays: 0, srcLastModified: null, configLastModified: null };
+  // Count commits since the last config update
+  try {
+    const countStr = execSync(
+      `git rev-list --count ${latestConfigCommitHash}..HEAD`,
+      { cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    ).trim();
+    const commitsSince = parseInt(countStr, 10) || 0;
+
+    const lastDate = execSync(
+      `git log -1 --format=%ci ${latestConfigCommitHash}`,
+      { cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    ).trim();
+
+    return {
+      commitsSinceConfigUpdate: commitsSince,
+      lastConfigCommit: lastDate,
+      isGitRepo: true,
+    };
+  } catch {
+    return { commitsSinceConfigUpdate: 0, lastConfigCommit: latestConfigCommitHash, isGitRepo: true };
   }
-
-  const driftMs = latestSrcMtime - latestConfigMtime;
-  const driftDays = Math.max(0, Math.floor(driftMs / (1000 * 60 * 60 * 24)));
-
-  return {
-    driftDays,
-    srcLastModified: new Date(latestSrcMtime),
-    configLastModified: new Date(latestConfigMtime),
-  };
 }
 
 export function checkAccuracy(dir: string): Check[] {
   const checks: Check[] = [];
 
-  // 1. Documented commands are valid
-  const cmds = validateDocumentedCommands(dir);
-  const cmdRatio = cmds.total > 0 ? cmds.valid.length / cmds.total : 1;
-  const cmdPoints = cmds.total === 0
-    ? POINTS_COMMANDS_VALID
-    : Math.round(cmdRatio * POINTS_COMMANDS_VALID);
+  // 1. References valid — do paths referenced in config exist on disk?
+  const refs = validateReferences(dir);
+  const refRatio = refs.total > 0 ? refs.valid.length / refs.total : 0;
+  const refPoints = refs.total === 0
+    ? 0
+    : Math.round(refRatio * POINTS_REFERENCES_VALID);
 
   checks.push({
-    id: 'commands_valid',
-    name: 'Documented commands exist',
+    id: 'references_valid',
+    name: 'References point to real files',
     category: 'accuracy',
-    maxPoints: POINTS_COMMANDS_VALID,
-    earnedPoints: cmdPoints,
-    passed: cmdRatio >= 0.8,
-    detail: cmds.total === 0
-      ? 'No commands documented'
-      : `${cmds.valid.length}/${cmds.total} commands verified`,
-    suggestion: cmds.invalid.length > 0
-      ? `Remove these invalid commands from CLAUDE.md: ${cmds.invalid.join('; ')}`
-      : undefined,
+    maxPoints: POINTS_REFERENCES_VALID,
+    earnedPoints: refPoints,
+    passed: refs.total === 0 ? false : refRatio >= 0.8,
+    detail: refs.total === 0
+      ? 'No file references found in config'
+      : `${refs.valid.length}/${refs.total} references verified`,
+    suggestion: refs.invalid.length > 0
+      ? `These references don't exist: ${refs.invalid.slice(0, 3).join(', ')}${refs.invalid.length > 3 ? ` (+${refs.invalid.length - 3} more)` : ''}`
+      : refs.total === 0
+        ? 'Add file path references to make your config grounded in the project'
+        : undefined,
+    fix: refs.invalid.length > 0
+      ? {
+          action: 'fix_references',
+          data: { invalid: refs.invalid.slice(0, 10), valid: refs.valid.slice(0, 10) },
+          instruction: `Remove or update these non-existent paths: ${refs.invalid.slice(0, 5).join(', ')}`,
+        }
+      : refs.total === 0
+        ? {
+            action: 'add_references',
+            data: { currentRefs: 0 },
+            instruction: 'Add file path references (e.g., `src/index.ts`) to ground the config in the project.',
+          }
+        : undefined,
   });
 
-  // 2. Documented file paths exist
-  const paths = validateDocumentedPaths(dir);
-  const pathRatio = paths.total > 0 ? paths.valid.length / paths.total : 1;
-  const pathPoints = paths.total === 0
-    ? POINTS_PATHS_VALID
-    : Math.round(pathRatio * POINTS_PATHS_VALID);
+  // 2. Config drift — has code changed since last config update? (git-based)
+  const drift = detectGitDrift(dir);
 
-  checks.push({
-    id: 'paths_valid',
-    name: 'Documented paths exist',
-    category: 'accuracy',
-    maxPoints: POINTS_PATHS_VALID,
-    earnedPoints: pathPoints,
-    passed: pathRatio >= 0.8,
-    detail: paths.total === 0
-      ? 'No file paths documented'
-      : `${paths.valid.length}/${paths.total} paths verified`,
-    suggestion: paths.invalid.length > 0
-      ? `Remove these non-existent paths from CLAUDE.md: ${paths.invalid.join('; ')}`
-      : undefined,
-  });
-
-  // 3. Config drift — has code changed without config update?
-  const drift = detectConfigDrift(dir);
   let driftPoints = POINTS_CONFIG_DRIFT;
-  if (drift.driftDays > 30) driftPoints = 0;
-  else if (drift.driftDays > 14) driftPoints = Math.round(POINTS_CONFIG_DRIFT * 0.25);
-  else if (drift.driftDays > 7) driftPoints = Math.round(POINTS_CONFIG_DRIFT * 0.5);
-  else if (drift.driftDays > 3) driftPoints = Math.round(POINTS_CONFIG_DRIFT * 0.75);
+  if (!drift.isGitRepo) {
+    driftPoints = POINTS_CONFIG_DRIFT; // can't measure, don't penalize
+  } else if (!drift.lastConfigCommit) {
+    driftPoints = 0; // config files aren't tracked in git
+  } else if (drift.commitsSinceConfigUpdate > 50) {
+    driftPoints = 0;
+  } else if (drift.commitsSinceConfigUpdate > 30) {
+    driftPoints = Math.round(POINTS_CONFIG_DRIFT * 0.25);
+  } else if (drift.commitsSinceConfigUpdate > 15) {
+    driftPoints = Math.round(POINTS_CONFIG_DRIFT * 0.5);
+  } else if (drift.commitsSinceConfigUpdate > 5) {
+    driftPoints = Math.round(POINTS_CONFIG_DRIFT * 0.75);
+  }
 
   checks.push({
     id: 'config_drift',
@@ -265,14 +200,23 @@ export function checkAccuracy(dir: string): Check[] {
     category: 'accuracy',
     maxPoints: POINTS_CONFIG_DRIFT,
     earnedPoints: driftPoints,
-    passed: drift.driftDays <= 7,
-    detail: drift.srcLastModified && drift.configLastModified
-      ? drift.driftDays === 0
-        ? 'Config is up to date with code changes'
-        : `Code changed ${drift.driftDays} day${drift.driftDays === 1 ? '' : 's'} after last config update`
-      : 'Could not determine drift',
-    suggestion: drift.driftDays > 7
-      ? `Code has changed since last config update — run \`caliber refresh\` to sync`
+    passed: drift.commitsSinceConfigUpdate <= 15 || !drift.isGitRepo,
+    detail: !drift.isGitRepo
+      ? 'Not a git repository — skipping drift check'
+      : !drift.lastConfigCommit
+        ? 'Config files not tracked in git'
+        : drift.commitsSinceConfigUpdate === 0
+          ? 'Config is up to date with latest commits'
+          : `${drift.commitsSinceConfigUpdate} commit${drift.commitsSinceConfigUpdate === 1 ? '' : 's'} since last config update`,
+    suggestion: drift.commitsSinceConfigUpdate > 15
+      ? `Code has had ${drift.commitsSinceConfigUpdate} commits since last config update — run \`caliber refresh\` to sync`
+      : undefined,
+    fix: drift.commitsSinceConfigUpdate > 15
+      ? {
+          action: 'refresh_config',
+          data: { commitsSince: drift.commitsSinceConfigUpdate, lastConfigCommit: drift.lastConfigCommit },
+          instruction: `Config is ${drift.commitsSinceConfigUpdate} commits behind. Review recent changes and update config accordingly.`,
+        }
       : undefined,
   });
 

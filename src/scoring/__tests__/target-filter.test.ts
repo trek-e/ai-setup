@@ -123,7 +123,7 @@ describe('computeLocalScore target filtering', () => {
 
     expect(result.categories.existence).toBeDefined();
     expect(result.categories.quality).toBeDefined();
-    expect(result.categories.coverage).toBeDefined();
+    expect(result.categories.grounding).toBeDefined();
     expect(result.categories.accuracy).toBeDefined();
     expect(result.categories.freshness).toBeDefined();
     expect(result.categories.bonus).toBeDefined();

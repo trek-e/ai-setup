@@ -1,0 +1,256 @@
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { join, relative } from 'path';
+
+export function readFileOrNull(filePath: string): string | null {
+  try {
+    return readFileSync(filePath, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+export function readJsonOrNull(filePath: string): Record<string, unknown> | null {
+  const content = readFileOrNull(filePath);
+  if (!content) return null;
+  try {
+    return JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+const IGNORED_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt',
+  '__pycache__', '.venv', 'venv', 'env', '.env', 'target', 'vendor',
+  '.cache', '.parcel-cache', 'coverage', '.nyc_output', '.turbo',
+  '.caliber', '.claude', '.cursor', '.agents', '.codex',
+]);
+
+const IGNORED_FILES = new Set([
+  '.DS_Store', 'Thumbs.db', '.gitignore', '.editorconfig',
+  '.prettierrc', '.prettierignore', '.eslintignore',
+  'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
+]);
+
+export interface ProjectStructure {
+  dirs: string[];
+  files: string[];
+}
+
+/**
+ * Scan the project filesystem up to 2 levels deep.
+ * Returns directory and file names relative to root.
+ */
+export function collectProjectStructure(dir: string, maxDepth = 2): ProjectStructure {
+  const dirs: string[] = [];
+  const files: string[] = [];
+
+  function walk(currentDir: string, depth: number): void {
+    if (depth > maxDepth) return;
+    try {
+      const entries = readdirSync(currentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        const name = entry.name;
+        if (name.startsWith('.') && IGNORED_DIRS.has(name)) continue;
+        if (IGNORED_FILES.has(name)) continue;
+
+        const rel = relative(dir, join(currentDir, name));
+
+        if (entry.isDirectory()) {
+          if (IGNORED_DIRS.has(name)) continue;
+          dirs.push(rel);
+          walk(join(currentDir, name), depth + 1);
+        } else if (entry.isFile()) {
+          files.push(rel);
+        }
+      }
+    } catch { /* dir doesn't exist or not readable */ }
+  }
+
+  walk(dir, 0);
+  return { dirs, files };
+}
+
+/**
+ * Collect all agent config file content (CLAUDE.md, .cursorrules, AGENTS.md, skills, .mdc rules).
+ */
+export function collectAllConfigContent(dir: string): string {
+  const parts: string[] = [];
+
+  for (const file of ['CLAUDE.md', '.cursorrules', 'AGENTS.md']) {
+    const content = readFileOrNull(join(dir, file));
+    if (content) parts.push(content);
+  }
+
+  // Skills
+  for (const skillsDir of [join(dir, '.claude', 'skills'), join(dir, '.agents', 'skills')]) {
+    try {
+      const entries = readdirSync(skillsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const skill = readFileOrNull(join(skillsDir, entry.name, 'SKILL.md'));
+          if (skill) parts.push(skill);
+        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+          const content = readFileOrNull(join(skillsDir, entry.name));
+          if (content) parts.push(content);
+        }
+      }
+    } catch { /* dir doesn't exist */ }
+  }
+
+  // Cursor .mdc rules
+  try {
+    const rulesDir = join(dir, '.cursor', 'rules');
+    const mdcFiles = readdirSync(rulesDir).filter(f => f.endsWith('.mdc'));
+    for (const f of mdcFiles) {
+      const content = readFileOrNull(join(rulesDir, f));
+      if (content) parts.push(content);
+    }
+  } catch { /* dir doesn't exist */ }
+
+  return parts.join('\n');
+}
+
+/**
+ * Estimate token count (same heuristic as llm/utils.ts).
+ */
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+export interface MarkdownStructure {
+  headingCount: number;
+  h2Count: number;
+  h3Count: number;
+  codeBlockCount: number;
+  codeBlockLines: number;
+  listItemCount: number;
+  inlineCodeCount: number;
+  totalLines: number;
+  nonEmptyLines: number;
+}
+
+/**
+ * Analyze the markdown structure of config content.
+ */
+export function analyzeMarkdownStructure(content: string): MarkdownStructure {
+  const lines = content.split('\n');
+  let headingCount = 0;
+  let h2Count = 0;
+  let h3Count = 0;
+  let codeBlockCount = 0;
+  let codeBlockLines = 0;
+  let listItemCount = 0;
+  let inlineCodeCount = 0;
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      if (!inCodeBlock) codeBlockCount++;
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines++;
+      continue;
+    }
+
+    if (trimmed.startsWith('## ') && !trimmed.startsWith('### ')) h2Count++;
+    if (trimmed.startsWith('### ')) h3Count++;
+    if (trimmed.startsWith('#')) headingCount++;
+    if (/^[-*+]\s/.test(trimmed) || /^\d+\.\s/.test(trimmed)) listItemCount++;
+
+    const inlineMatches = trimmed.match(/`[^`]+`/g);
+    if (inlineMatches) inlineCodeCount += inlineMatches.length;
+  }
+
+  return {
+    headingCount,
+    h2Count,
+    h3Count,
+    codeBlockCount,
+    codeBlockLines,
+    listItemCount,
+    inlineCodeCount,
+    totalLines: lines.length,
+    nonEmptyLines: lines.filter(l => l.trim().length > 0).length,
+  };
+}
+
+/**
+ * Extract all path-like references and backtick-quoted terms from markdown content.
+ * Returns unique references that look like they point to files or directories.
+ */
+export function extractReferences(content: string): string[] {
+  const refs = new Set<string>();
+
+  // Backtick-quoted terms that look like paths (contain / or .)
+  const backtickPattern = /`([^`]+)`/g;
+  let match: RegExpExecArray | null;
+  while ((match = backtickPattern.exec(content)) !== null) {
+    const term = match[1].trim();
+    // Must look like a path (contains / or ends with .ext) and not be a shell command
+    if ((term.includes('/') || /\.\w{1,5}$/.test(term)) && !term.startsWith('-') && term.length < 200) {
+      // Skip scoped package names (@scope/package)
+      if (term.startsWith('@') && (term.match(/\//g) || []).length === 1) continue;
+      // Skip things that look like commands (contain spaces)
+      if (term.includes(' ')) continue;
+      // Skip semver-like patterns
+      if (/^\d+\.\d+/.test(term)) continue;
+      // For backtick refs with / but no file extension, only include if
+      // they look like directory paths (lowercase, contain common path segments)
+      if (term.includes('/') && !/\.\w{1,5}$/.test(term)) {
+        // Must be lowercase or contain path-like segments to be a filesystem path
+        // "Anthropic/Vertex" or "retry/backoff" are English, not paths
+        if (term !== term.toLowerCase() && !/^[a-z]/.test(term)) continue;
+        // Very short segments on both sides of / are likely not paths
+        const segments = term.split('/');
+        if (segments.every(s => s.length <= 3)) continue;
+      }
+      // Strip trailing punctuation
+      const cleaned = term.replace(/[,;:!?)]+$/, '');
+      if (cleaned.length > 1) refs.add(cleaned);
+    }
+  }
+
+  // Bare path-like strings outside backticks (word/word or word/word.ext)
+  // Only match paths with a file extension or clear directory structure to avoid
+  // matching English phrases like "retry/backoff" or "cheaper/faster"
+  const pathPattern = /(?:^|\s)((?:[a-zA-Z0-9_@.-]+\/)+[a-zA-Z0-9_.*-]+\.[a-zA-Z]{1,5})/gm;
+  while ((match = pathPattern.exec(content)) !== null) {
+    const term = match[1].trim();
+    if (term.length > 2 && term.length < 200) {
+      if (term.startsWith('@') && (term.match(/\//g) || []).length === 1) continue;
+      const cleaned = term.replace(/[,;:!?)]+$/, '');
+      if (cleaned.length > 1) refs.add(cleaned);
+    }
+  }
+
+  return Array.from(refs);
+}
+
+/**
+ * Classify a line as "concrete" (has specific project references) or "abstract" (generic prose).
+ * Lines inside code blocks, with backticks, or with path-like content are concrete.
+ * Returns null for neutral lines (empty, headings) that should be excluded from the ratio.
+ */
+export function classifyLine(line: string, inCodeBlock: boolean): 'concrete' | 'abstract' | 'neutral' {
+  if (inCodeBlock) return 'concrete';
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return 'neutral';
+  if (trimmed.startsWith('#')) return 'neutral';
+
+  // Has inline code references
+  if (/`[^`]+`/.test(trimmed)) return 'concrete';
+  // Has file path pattern (with extension to avoid matching English like "and/or")
+  if (/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\.[a-zA-Z]{1,5}/.test(trimmed)) return 'concrete';
+  // Has directory path pattern (at least one segment > 3 chars)
+  if (/[a-zA-Z0-9_]{4,}\/[a-zA-Z0-9_.-]/.test(trimmed)) return 'concrete';
+  // References a file with extension
+  if (/\b[a-zA-Z0-9_-]+\.[a-zA-Z]{1,5}\b/.test(trimmed) && !/\b(e\.g|i\.e|vs|etc)\b/i.test(trimmed)) return 'concrete';
+
+  return 'abstract';
+}
