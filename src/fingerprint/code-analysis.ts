@@ -26,9 +26,9 @@ const CONFIG_GLOBS_DIRS: Array<{ dir: string; pattern: RegExp }> = [
   { dir: '.github/workflows', pattern: /\.ya?ml$/ },
 ];
 
-const TOTAL_BUDGET = 400_000; // ~100K tokens
-const CONFIG_BUDGET = Math.floor(TOTAL_BUDGET * 0.15); // 60K chars for config files
-const SOURCE_BUDGET = Math.floor(TOTAL_BUDGET * 0.85); // 340K chars for source code
+const TOTAL_BUDGET = 600_000; // ~150K tokens
+const CONFIG_BUDGET = Math.floor(TOTAL_BUDGET * 0.15); // 90K chars for config files
+const SOURCE_BUDGET = Math.floor(TOTAL_BUDGET * 0.85); // 510K chars for source code
 
 export interface FileSummary {
   path: string;
