@@ -108,42 +108,6 @@ async function searchSkillsSh(technologies: string[]): Promise<SkillResult[]> {
   return Array.from(bestBySlug.values());
 }
 
-async function searchTessl(technologies: string[]): Promise<SkillResult[]> {
-  const results: SkillResult[] = [];
-  const seen = new Set<string>();
-
-  for (const tech of technologies) {
-    try {
-      const resp = await fetch(`https://tessl.io/registry?q=${encodeURIComponent(tech)}`, {
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!resp.ok) continue;
-      const html = await resp.text();
-
-      const linkMatches = html.matchAll(/\/registry\/skills\/github\/([^/]+)\/([^/]+)\/([^/"]+)/g);
-      for (const match of linkMatches) {
-        const [, org, repo, skillName] = match;
-        const slug = `${org}-${repo}-${skillName}`.toLowerCase();
-        if (seen.has(slug)) continue;
-        seen.add(slug);
-        results.push({
-          name: skillName,
-          slug,
-          source_url: `https://github.com/${org}/${repo}`,
-          score: 0,
-          reason: `Skill from ${org}/${repo}`,
-          detected_technology: tech,
-          item_type: 'skill',
-        });
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return results;
-}
-
 const AWESOME_CLAUDE_CODE_URL = 'https://raw.githubusercontent.com/hesreallyhim/awesome-claude-code/main/README.md';
 
 async function searchAwesomeClaudeCode(technologies: string[]): Promise<SkillResult[]> {
@@ -186,7 +150,6 @@ async function searchAwesomeClaudeCode(technologies: string[]): Promise<SkillRes
 async function searchAllProviders(technologies: string[], platform?: string): Promise<SkillResult[]> {
   const searches: Promise<SkillResult[]>[] = [
     searchSkillsSh(technologies),
-    searchTessl(technologies),
   ];
 
   if (platform === 'claude' || !platform) {
