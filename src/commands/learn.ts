@@ -51,6 +51,10 @@ export async function learnObserveCommand(options: { failure?: boolean }) {
 }
 
 export async function learnFinalizeCommand() {
+  // Skip if another caliber process is already running (e.g. hook fired mid-session)
+  const { isCaliberRunning } = await import('../lib/lock.js');
+  if (isCaliberRunning()) return;
+
   try {
     const config = loadConfig();
     if (!config) {

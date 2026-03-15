@@ -118,6 +118,12 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
 export async function refreshCommand(options: RefreshOptions) {
   const quiet = !!options.quiet;
 
+  // Skip if another caliber process is already running (e.g. hook fired mid-session)
+  if (quiet) {
+    const { isCaliberRunning } = await import('../lib/lock.js');
+    if (isCaliberRunning()) return;
+  }
+
   try {
     const config = loadConfig();
     if (!config) {
