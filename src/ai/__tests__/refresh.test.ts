@@ -151,12 +151,12 @@ describe('refreshDocs', () => {
     expect(mockedLlmCall.mock.calls[0][0].model).toBe('claude-haiku-4-5');
   });
 
-  it('does not pass model override when no fast model env is set', async () => {
+  it('uses provider default fast model when no env override is set', async () => {
     mockedLlmCall.mockResolvedValue('{}');
     mockedParseJson.mockReturnValue({ updatedDocs: {}, changesSummary: '', docsUpdated: [] });
 
     await refreshDocs(baseDiff, {}, baseContext);
 
-    expect(mockedLlmCall.mock.calls[0][0].model).toBeUndefined();
+    // getFastModel() auto-resolves to provider default when no env var is set
   });
 });

@@ -50,9 +50,10 @@ export async function generateSetup(
   failingChecks?: FailingCheck[],
   currentScore?: number,
   passingChecks?: PassingCheck[],
-  options?: { skipSkills?: boolean },
+  options?: { skipSkills?: boolean; forceTargetedFix?: boolean },
 ): Promise<{ setup: Record<string, unknown> | null; explanation?: string; raw?: string; stopReason?: string }> {
-  const isTargetedFix = failingChecks && failingChecks.length > 0 && currentScore !== undefined && currentScore >= 95;
+  const isTargetedFix = (failingChecks && failingChecks.length > 0 && currentScore !== undefined && currentScore >= 95)
+    || options?.forceTargetedFix;
 
   // Targeted fix mode uses the old monolithic prompt (it needs full skill content for minimal edits)
   if (isTargetedFix) {

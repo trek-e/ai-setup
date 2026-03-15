@@ -506,7 +506,7 @@ export async function initCommand(options: InitOptions) {
           polishFailing,
           afterScore.score,
           polishPassing,
-          { skipSkills: true },
+          { skipSkills: true, forceTargetedFix: true },
         );
 
         if (polishResult.setup) {
