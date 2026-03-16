@@ -56,14 +56,14 @@ jobs:
           fi
 
           TIMESTAMP=$(date +%s)
-          NEW_VERSION="${BASE_VERSION}-next.${TIMESTAMP}"
+          NEW_VERSION="${BASE_VERSION}-dev.${TIMESTAMP}"
 
           npm version "$NEW_VERSION" --no-git-tag-version
           echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Publishing v${NEW_VERSION} to @next"
+          echo "Publishing v${NEW_VERSION} to @dev"
 
-      - name: Publish with next tag
+      - name: Publish with dev tag
         if: steps.version.outputs.skip != 'true'
-        run: npm publish --access public --tag next
+        run: npm publish --access public --tag dev
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -47,19 +47,19 @@ Caliber has two release channels:
 | Branch | npm tag | Version format | Install |
 |--------|---------|----------------|---------|
 | `master` | `latest` | `1.20.0` | `npm i @rely-ai/caliber` |
-| `next` | `next` | `1.20.0-next.1742140800` | `npm i @rely-ai/caliber@next` |
+| `next` | `dev` | `1.20.0-dev.1742140800` | `npm i @rely-ai/caliber@dev` |
 
 - **`master`** — stable releases. Merging here auto-publishes the official version.
 - **`next`** — pre-release channel for testing risky or in-progress changes. Pushing here auto-publishes a dev version that won't affect `latest`.
 
-### Testing with the next channel
+### Testing with the dev channel
 
 ```bash
 # Install the latest pre-release
-npm i @rely-ai/caliber@next
+npm i @rely-ai/caliber@dev
 
 # Or run directly
-npx @rely-ai/caliber@next score
+npx @rely-ai/caliber@dev score
 ```
 
 ## Pull requests
