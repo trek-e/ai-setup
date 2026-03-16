@@ -28,6 +28,7 @@ import { searchSkills, selectSkills, installSkills } from './recommend.js';
 import type { SkillSearchResult } from './recommend.js';
 import type { FailingCheck, PassingCheck } from '../ai/generate.js';
 import { buildGeneratePrompt } from '../ai/generate.js';
+import { runScoreRefineWithSpinner } from '../ai/score-refine.js';
 import { DebugReport } from '../lib/debug-report.js';
 import { ParallelTaskDisplay } from '../utils/parallel-tasks.js';
 import {
@@ -394,13 +395,15 @@ export async function initCommand(options: InitOptions) {
   }
 
   log(options.verbose, `Generation completed: ${elapsedMs}ms, stopReason: ${genStopReason || 'end_turn'}`);
-  printSetupSummary(generatedSetup);
 
   const sessionHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   sessionHistory.push({
     role: 'assistant',
     content: summarizeSetup('Initial generation', generatedSetup),
   });
+
+  // Score-based auto-refinement
+  generatedSetup = await runScoreRefineWithSpinner(generatedSetup, process.cwd(), sessionHistory);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Step 3 — Review
