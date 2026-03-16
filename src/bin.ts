@@ -10,8 +10,8 @@ if (process.env.CALIBER_LOCAL) {
   process.env.CALIBER_SKIP_UPDATE_CHECK = '1';
 }
 
-const isVersionCheck = process.argv.includes('--version') || process.argv.includes('-V');
-if (!isVersionCheck) {
+const isQuickExit = ['--version', '-V', '--help', '-h'].some(f => process.argv.includes(f));
+if (!isQuickExit) {
   await checkForUpdates();
 }
 
