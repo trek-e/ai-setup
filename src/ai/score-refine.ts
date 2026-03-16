@@ -15,7 +15,6 @@ import {
   POINTS_NO_DIR_TREE,
   POINTS_HAS_STRUCTURE,
 } from '../scoring/constants.js';
-import { refineSetup } from './refine.js';
 import { llmCall } from '../llm/index.js';
 import { stripMarkdownFences } from '../llm/utils.js';
 
@@ -144,7 +143,7 @@ export function validateSetup(
 
 function buildFeedbackMessage(issues: ScoringIssue[]): string {
   const lines: string[] = [
-    'Your generated config has these scoring issues. Fix ONLY these — do not rewrite, restructure, or make cosmetic changes to anything else:\n',
+    'Fix ONLY these scoring issues — do not rewrite, restructure, or make cosmetic changes:\n',
   ];
 
   for (let i = 0; i < issues.length; i++) {
@@ -153,7 +152,6 @@ function buildFeedbackMessage(issues: ScoringIssue[]): string {
     lines.push(`   Action: ${issue.fixInstruction}\n`);
   }
 
-  lines.push('Return the complete updated AgentSetup JSON with only these fixes applied.');
   return lines.join('\n');
 }
 
@@ -199,14 +197,23 @@ export async function scoreAndRefine(
       callbacks.onStatus(`Fixing ${issues.length} scoring issue${issues.length === 1 ? '' : 's'}: ${issueNames}...`);
     }
 
-    const patched = await applyTargetedFixes(currentSetup, issues, sessionHistory);
+    const refined = await applyTargetedFixes(currentSetup, issues);
 
-    if (!patched) {
+    if (!refined) {
       if (callbacks?.onStatus) callbacks.onStatus('Refinement failed, keeping current setup');
       return bestSetup;
     }
 
-    currentSetup = patched;
+    sessionHistory.push({
+      role: 'user',
+      content: `Fix scoring issues: ${issues.map(i => i.check).join(', ')}`,
+    });
+    sessionHistory.push({
+      role: 'assistant',
+      content: `Applied scoring fixes for: ${issues.map(i => i.check).join(', ')}`,
+    });
+
+    currentSetup = refined;
   }
 
   // Final check after last iteration
@@ -222,46 +229,49 @@ export async function scoreAndRefine(
 async function applyTargetedFixes(
   setup: Record<string, unknown>,
   issues: ScoringIssue[],
-  sessionHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
 ): Promise<Record<string, unknown> | null> {
   const { claudeMd, agentsMd } = extractConfigContent(setup);
-  const content = claudeMd ?? agentsMd;
-  if (!content) return null;
+
+  const targets: { key: 'claudeMd' | 'agentsMd'; label: string; content: string }[] = [];
+  if (claudeMd) targets.push({ key: 'claudeMd', label: 'CLAUDE.md', content: claudeMd });
+  if (agentsMd) targets.push({ key: 'agentsMd', label: 'AGENTS.md', content: agentsMd });
+  if (targets.length === 0) return null;
 
   const feedbackMessage = buildFeedbackMessage(issues);
-  const contentLabel = claudeMd ? 'CLAUDE.md' : 'AGENTS.md';
+
+  const contentBlock = targets.map(t =>
+    `### ${t.label}\n\`\`\`markdown\n${t.content}\n\`\`\``
+  ).join('\n\n');
 
   const prompt = [
-    `Here is the current ${contentLabel} content:\n`,
-    '```markdown',
-    content,
-    '```\n',
+    'Here are the config files with scoring issues:\n',
+    contentBlock,
+    '\n',
     feedbackMessage,
-    `\nReturn ONLY the fixed ${contentLabel} content as raw markdown (no JSON, no code fences). Apply the fixes above and nothing else — do not rewrite, restructure, or make cosmetic changes.`,
+    `\nReturn ONLY the fixed content as a JSON object with keys ${targets.map(t => `"${t.key}"`).join(', ')}. Each value is the fixed markdown string. No code fences, no explanations.`,
   ].join('\n');
 
   try {
     const raw = await llmCall({
-      system: `You fix scoring issues in AI agent configuration files. Return only the fixed markdown content — no explanations, no JSON wrappers, no code fences.`,
+      system: 'You fix scoring issues in AI agent configuration files. Return only a JSON object with the fixed content — no explanations, no code fences.',
       prompt,
       maxTokens: 8000,
     });
 
-    const fixed = stripMarkdownFences(raw).trim();
-    if (!fixed || fixed.length < 50) return null;
+    const cleaned = stripMarkdownFences(raw);
+    const jsonStart = cleaned.indexOf('{');
+    const jsonToParse = jsonStart !== -1 ? cleaned.slice(jsonStart) : cleaned;
+    const fixes = JSON.parse(jsonToParse) as Record<string, string>;
 
-    const patched = JSON.parse(JSON.stringify(setup)) as Record<string, unknown>;
-    if (claudeMd) {
-      (patched.claude as Record<string, unknown>).claudeMd = fixed;
-    } else {
-      (patched.codex as Record<string, unknown>).agentsMd = fixed;
+    const patched = structuredClone(setup);
+    for (const target of targets) {
+      if (typeof fixes[target.key] === 'string' && fixes[target.key].length > 50) {
+        const parent = target.key === 'claudeMd'
+          ? (patched.claude as Record<string, unknown>)
+          : (patched.codex as Record<string, unknown>);
+        if (parent) parent[target.key] = fixes[target.key];
+      }
     }
-
-    sessionHistory.push({ role: 'user', content: feedbackMessage });
-    sessionHistory.push({
-      role: 'assistant',
-      content: `Applied scoring fixes for: ${issues.map(i => i.check).join(', ')}`,
-    });
 
     return patched;
   } catch {
