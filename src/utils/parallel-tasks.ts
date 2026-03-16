@@ -13,6 +13,8 @@ interface TaskState {
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const SPINNER_INTERVAL_MS = 80;
+const NAME_COL_WIDTH = 26;
+const PREFIX = '    ';
 
 export class ParallelTaskDisplay {
   private tasks: TaskState[] = [];
@@ -64,51 +66,56 @@ export class ParallelTaskDisplay {
     return `${Math.floor(secs / 60)}m ${secs % 60}s`;
   }
 
-  private truncate(text: string, maxVisible: number): string {
-    const plain = stripAnsi(text);
-    if (plain.length <= maxVisible) return text;
-    // Walk the original string tracking visible chars
-    let visible = 0;
-    let i = 0;
-    while (i < text.length && visible < maxVisible - 3) {
-      if (text[i] === '\x1b') {
-        const end = text.indexOf('m', i);
-        if (end !== -1) { i = end + 1; continue; }
-      }
-      visible++;
-      i++;
-    }
-    return text.slice(0, i) + '...';
+  private smartTruncate(text: string, max: number): string {
+    if (text.length <= max) return text;
+    const cut = text.slice(0, max - 1);
+    const lastSpace = cut.lastIndexOf(' ');
+    const boundary = lastSpace > max * 0.5 ? lastSpace : max - 1;
+    return text.slice(0, boundary) + '…';
   }
 
   private renderLine(task: TaskState): string {
-    const maxWidth = process.stdout.columns || 80;
+    const cols = process.stdout.columns || 80;
     const elapsed = task.startTime
       ? this.formatTime((task.endTime ?? Date.now()) - task.startTime)
       : '';
+    const timeStr = elapsed ? ` ${chalk.dim(elapsed)}` : '';
+    const timePlain = elapsed ? ` ${elapsed}` : '';
 
-    let line: string;
+    let icon: string;
+    let nameStyle: (s: string) => string;
+    let msgStyle: (s: string) => string;
+
     switch (task.status) {
       case 'pending':
-        line = `  ${chalk.dim('○')} ${chalk.dim(task.name)}${task.message ? chalk.dim(` — ${task.message}`) : ''}`;
+        icon = chalk.dim('○');
+        nameStyle = chalk.dim;
+        msgStyle = chalk.dim;
         break;
-      case 'running': {
-        const spinner = chalk.cyan(SPINNER_FRAMES[this.spinnerFrame]);
-        const time = elapsed ? chalk.dim(` (${elapsed})`) : '';
-        line = `  ${spinner} ${task.name}${task.message ? chalk.dim(` — ${task.message}`) : ''}${time}`;
+      case 'running':
+        icon = chalk.cyan(SPINNER_FRAMES[this.spinnerFrame]);
+        nameStyle = chalk.white;
+        msgStyle = chalk.dim;
         break;
-      }
-      case 'done': {
-        const time = elapsed ? chalk.dim(` (${elapsed})`) : '';
-        line = `  ${chalk.green('✓')} ${task.name}${task.message ? chalk.dim(` — ${task.message}`) : ''}${time}`;
+      case 'done':
+        icon = chalk.green('✓');
+        nameStyle = chalk.white;
+        msgStyle = chalk.dim;
         break;
-      }
       case 'failed':
-        line = `  ${chalk.red('✗')} ${task.name}${task.message ? chalk.red(` — ${task.message}`) : ''}`;
+        icon = chalk.red('✗');
+        nameStyle = chalk.white;
+        msgStyle = chalk.red;
         break;
     }
 
-    return this.truncate(line, maxWidth - 1);
+    const paddedName = task.name.padEnd(NAME_COL_WIDTH);
+    // icon(1) + space(1) + name(NAME_COL_WIDTH) + time
+    const usedByFixed = PREFIX.length + 2 + NAME_COL_WIDTH + timePlain.length;
+    const msgMax = Math.max(cols - usedByFixed - 2, 10);
+    const msg = task.message ? this.smartTruncate(task.message, msgMax) : '';
+
+    return `${PREFIX}${icon} ${nameStyle(paddedName)}${msg ? msgStyle(msg) : ''}${timeStr}`;
   }
 
   private draw(initial: boolean): void {
@@ -119,9 +126,6 @@ export class ParallelTaskDisplay {
     stdout.write('\x1b[0J');
 
     const lines = this.tasks.map(t => this.renderLine(t));
-    const totalElapsed = this.formatTime(Date.now() - this.startTime);
-    lines.push(chalk.dim(`\n  Total: ${totalElapsed}`));
-
     const output = lines.join('\n');
     stdout.write(output + '\n');
     this.lineCount = output.split('\n').length;

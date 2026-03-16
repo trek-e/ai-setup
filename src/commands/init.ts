@@ -9,7 +9,7 @@ import { generateSetup, generateSkillsForSetup } from '../ai/generate.js';
 import { refineSetup } from '../ai/refine.js';
 import { writeSetup, undoSetup } from '../writers/index.js';
 import { stageFiles, cleanupStaging } from '../writers/staging.js';
-import { promptWantsReview, promptReviewMethod, openReview } from '../utils/review.js';
+import { promptReviewMethod, openReview } from '../utils/review.js';
 import { collectSetupFiles } from './setup-files.js';
 import { installHook, installPreCommitHook } from '../lib/hooks.js';
 import { installLearningHooks } from '../lib/learning-hooks.js';
@@ -223,75 +223,78 @@ export async function initCommand(options: InitOptions) {
   let skillSearchResult: SkillSearchResult = { results: [], contentMap: new Map() };
   let fingerprint!: Fingerprint;
 
-  // Phase A: Fingerprint (before display — handles empty project prompt)
-  const fpSpinner = ora('Scanning project...').start();
-  try {
-    fingerprint = await collectFingerprint(process.cwd());
-    fpSpinner.succeed(`Stack detected — ${fingerprint.languages.join(', ') || 'no languages'}${fingerprint.frameworks.length > 0 ? `, ${fingerprint.frameworks.join(', ')}` : ''}`);
-  } catch (err) {
-    fpSpinner.fail('Failed to scan project');
-    throw new Error('__exit__');
-  }
-
-  trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
-  log(options.verbose, `Fingerprint: ${fingerprint.languages.length} languages, ${fingerprint.frameworks.length} frameworks, ${fingerprint.fileTree.length} files`);
-
-  if (report) {
-    report.addJson('Fingerprint: Git', { remote: fingerprint.gitRemoteUrl, packageName: fingerprint.packageName });
-    report.addCodeBlock('Fingerprint: File Tree', fingerprint.fileTree.join('\n'));
-    report.addJson('Fingerprint: Detected Stack', { languages: fingerprint.languages, frameworks: fingerprint.frameworks, tools: fingerprint.tools });
-    report.addJson('Fingerprint: Existing Configs', fingerprint.existingConfigs);
-    if (fingerprint.codeAnalysis) report.addJson('Fingerprint: Code Analysis', fingerprint.codeAnalysis);
-  }
-
-  // Get project description if empty
-  const isEmpty = fingerprint.fileTree.length < 3;
-  if (isEmpty) {
-    fingerprint.description = await promptInput('What will you build in this project?');
-  }
-
-  // Evaluate dismissals before generation (updates baseline consistently)
-  const failingForDismissal = baselineScore.checks.filter(c => !c.passed && c.maxPoints > 0);
-  if (failingForDismissal.length > 0) {
-    const newDismissals = await evaluateDismissals(failingForDismissal, fingerprint);
-    if (newDismissals.length > 0) {
-      const existing = readDismissedChecks();
-      const existingIds = new Set(existing.map(d => d.id));
-      const merged = [...existing, ...newDismissals.filter(d => !existingIds.has(d.id))];
-      writeDismissedChecks(merged);
-      baselineScore = computeLocalScore(process.cwd(), targetAgent);
-    }
-  }
-
-  // Determine targeted fix mode
-  let failingChecks: FailingCheck[] | undefined;
-  let passingChecks: PassingCheck[] | undefined;
-  let currentScore: number | undefined;
-
-  if (hasExistingConfig && baselineScore.score >= 95 && !options.force) {
-    const currentLlmFixable = baselineScore.checks
-      .filter(c => !c.passed && c.maxPoints > 0 && !NON_LLM_CHECKS.has(c.id));
-    failingChecks = currentLlmFixable
-      .map(c => ({ name: c.name, suggestion: c.suggestion, fix: c.fix }));
-    passingChecks = baselineScore.checks
-      .filter(c => c.passed)
-      .map(c => ({ name: c.name }));
-    currentScore = baselineScore.score;
-  }
-
-  if (report) {
-    const fullPrompt = buildGeneratePrompt(fingerprint, targetAgent, fingerprint.description, failingChecks, currentScore, passingChecks);
-    report.addCodeBlock('Generation: Full LLM Prompt', fullPrompt);
-  }
-
-  // Phase B: Generate + search in parallel
   const display = new ParallelTaskDisplay();
+  const TASK_STACK = display.add('Detecting project stack');
   const TASK_CONFIG = display.add('Generating configs');
   const TASK_SKILLS_GEN = display.add('Generating skills');
   const TASK_SKILLS_SEARCH = wantsSkills ? display.add('Searching community skills') : -1;
   display.start();
 
   try {
+    // Phase A: Fingerprint
+    display.update(TASK_STACK, 'running');
+    fingerprint = await collectFingerprint(process.cwd());
+
+    const stackSummary = [
+      ...fingerprint.languages,
+      ...fingerprint.frameworks,
+    ].join(', ') || 'no languages';
+    display.update(TASK_STACK, 'done', stackSummary);
+
+    trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
+    log(options.verbose, `Fingerprint: ${fingerprint.languages.length} languages, ${fingerprint.frameworks.length} frameworks, ${fingerprint.fileTree.length} files`);
+
+    if (report) {
+      report.addJson('Fingerprint: Git', { remote: fingerprint.gitRemoteUrl, packageName: fingerprint.packageName });
+      report.addCodeBlock('Fingerprint: File Tree', fingerprint.fileTree.join('\n'));
+      report.addJson('Fingerprint: Detected Stack', { languages: fingerprint.languages, frameworks: fingerprint.frameworks, tools: fingerprint.tools });
+      report.addJson('Fingerprint: Existing Configs', fingerprint.existingConfigs);
+      if (fingerprint.codeAnalysis) report.addJson('Fingerprint: Code Analysis', fingerprint.codeAnalysis);
+    }
+
+    // Get project description if empty
+    const isEmpty = fingerprint.fileTree.length < 3;
+    if (isEmpty) {
+      display.stop();
+      fingerprint.description = await promptInput('What will you build in this project?');
+      display.start();
+    }
+
+    // Evaluate dismissals before generation (updates baseline consistently)
+    const failingForDismissal = baselineScore.checks.filter(c => !c.passed && c.maxPoints > 0);
+    if (failingForDismissal.length > 0) {
+      const newDismissals = await evaluateDismissals(failingForDismissal, fingerprint);
+      if (newDismissals.length > 0) {
+        const existing = readDismissedChecks();
+        const existingIds = new Set(existing.map(d => d.id));
+        const merged = [...existing, ...newDismissals.filter(d => !existingIds.has(d.id))];
+        writeDismissedChecks(merged);
+        baselineScore = computeLocalScore(process.cwd(), targetAgent);
+      }
+    }
+
+    // Determine targeted fix mode
+    let failingChecks: FailingCheck[] | undefined;
+    let passingChecks: PassingCheck[] | undefined;
+    let currentScore: number | undefined;
+
+    if (hasExistingConfig && baselineScore.score >= 95 && !options.force) {
+      const currentLlmFixable = baselineScore.checks
+        .filter(c => !c.passed && c.maxPoints > 0 && !NON_LLM_CHECKS.has(c.id));
+      failingChecks = currentLlmFixable
+        .map(c => ({ name: c.name, suggestion: c.suggestion, fix: c.fix }));
+      passingChecks = baselineScore.checks
+        .filter(c => c.passed)
+        .map(c => ({ name: c.name }));
+      currentScore = baselineScore.score;
+    }
+
+    if (report) {
+      const fullPrompt = buildGeneratePrompt(fingerprint, targetAgent, fingerprint.description, failingChecks, currentScore, passingChecks);
+      report.addCodeBlock('Generation: Full LLM Prompt', fullPrompt);
+    }
+
+    // Phase B: Generate + search in parallel
     display.update(TASK_CONFIG, 'running');
 
     const generatePromise = (async () => {
@@ -348,7 +351,7 @@ export async function initCommand(options: InitOptions) {
         ]);
         skillSearchResult = await searchWithTimeout;
         const count = skillSearchResult.results.length;
-        display.update(TASK_SKILLS_SEARCH, 'done', count > 0 ? `${count} skills found` : 'No matches');
+        display.update(TASK_SKILLS_SEARCH, 'done', count > 0 ? `${count} found` : 'No matches');
       } catch (err) {
         const reason = err instanceof Error && err.message === 'timeout' ? 'Timed out' : 'Search failed';
         display.update(TASK_SKILLS_SEARCH, 'failed', reason);
@@ -372,7 +375,7 @@ export async function initCommand(options: InitOptions) {
   const mins = Math.floor(elapsedMs / 60000);
   const secs = Math.floor((elapsedMs % 60000) / 1000);
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-  console.log(chalk.dim(`\n  Completed in ${timeStr}\n`));
+  console.log(chalk.dim(`\n  Done in ${timeStr}\n`));
 
   if (!generatedSetup) {
     console.log(chalk.red('  Failed to generate setup.'));
@@ -415,9 +418,10 @@ export async function initCommand(options: InitOptions) {
     console.log('');
   }
 
+  const hasSkillResults = skillSearchResult.results.length > 0;
   let action: 'accept' | 'refine' | 'decline';
 
-  if (totalChanges === 0 && skillSearchResult.results.length === 0) {
+  if (totalChanges === 0 && !hasSkillResults) {
     console.log(chalk.dim('  No changes needed — your configs are already up to date.\n'));
     cleanupStaging();
     action = 'accept';
@@ -427,14 +431,21 @@ export async function initCommand(options: InitOptions) {
     trackInitReviewAction(action, 'auto-approved');
   } else {
     if (totalChanges > 0) {
-      const wantsReview = await promptWantsReview();
-      if (wantsReview) {
+      const reviewChoice = await select({
+        message: 'Review your tailored setup?',
+        choices: [
+          { name: 'Yes, show me the diffs', value: 'review' as const },
+          ...(hasSkillResults ? [{ name: `No, continue to community skills (${skillSearchResult.results.length} found)`, value: 'skip' as const }] : []),
+          { name: 'No, continue', value: 'skip' as const },
+        ],
+      });
+      if (reviewChoice === 'review') {
         const reviewMethod = await promptReviewMethod();
         await openReview(reviewMethod, staged.stagedFiles);
       }
     }
 
-    action = await promptReviewAction();
+    action = await promptReviewAction(hasSkillResults);
     trackInitReviewAction(action, totalChanges > 0 ? 'reviewed' : 'skipped');
   }
 
@@ -453,7 +464,7 @@ export async function initCommand(options: InitOptions) {
     console.log(chalk.dim(`  ${chalk.green(`${restaged.newFiles} new`)} / ${chalk.yellow(`${restaged.modifiedFiles} modified`)} file${restaged.newFiles + restaged.modifiedFiles !== 1 ? 's' : ''}\n`));
     printSetupSummary(generatedSetup);
     await openReview('terminal', restaged.stagedFiles);
-    action = await promptReviewAction();
+    action = await promptReviewAction(hasSkillResults);
     trackInitReviewAction(action, 'terminal');
   }
 
@@ -802,13 +813,17 @@ async function promptHookType(targetAgent: TargetAgent): Promise<HookChoice> {
   });
 }
 
-async function promptReviewAction(): Promise<'accept' | 'refine' | 'decline'> {
+async function promptReviewAction(hasSkillResults = false): Promise<'accept' | 'refine' | 'decline'> {
+  const acceptLabel = hasSkillResults
+    ? 'Accept and continue to community skills'
+    : 'Accept and apply';
+
   return select({
     message: 'What would you like to do?',
     choices: [
-      { name: 'Accept and apply', value: 'accept' as const },
+      { name: acceptLabel, value: 'accept' as const },
       { name: 'Refine via chat', value: 'refine' as const },
-      { name: 'Decline', value: 'decline' as const },
+      { name: 'Decline all changes', value: 'decline' as const },
     ],
   });
 }
@@ -820,7 +835,7 @@ function printSetupSummary(setup: Record<string, unknown>) {
   const deletions = setup.deletions as Array<{ filePath: string; reason: string }> | undefined;
 
   console.log('');
-  console.log(chalk.bold('  Proposed changes:\n'));
+  console.log(chalk.bold('  Your tailored setup:\n'));
 
   const getDescription = (filePath: string): string | undefined => {
     return fileDescriptions?.[filePath];
