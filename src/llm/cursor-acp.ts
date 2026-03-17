@@ -1,270 +1,164 @@
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
-import readline from 'node:readline';
-import os from 'node:os';
 import type { LLMProvider, LLMCallOptions, LLMStreamOptions, LLMStreamCallbacks, LLMConfig } from './types.js';
 
-const ACP_AGENT_BIN = 'agent';
+const AGENT_BIN = 'agent';
 const IS_WINDOWS = process.platform === 'win32';
 
-interface JsonRpcRequest {
-  jsonrpc: '2.0';
-  id?: number;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-interface JsonRpcResponse {
-  jsonrpc: '2.0';
-  id?: number;
-  result?: unknown;
-  error?: { code: number; message: string };
-}
-
-interface PendingCall {
-  resolve: (value: unknown) => void;
-  reject: (err: Error) => void;
-}
-
-interface AcpConnection {
-  child: ChildProcess;
-  rl: readline.Interface;
-  pending: Map<number, PendingCall>;
-  nextId: number;
-  activeCallbacks: LLMStreamCallbacks | null;
-}
-
 /**
- * Cursor provider that uses the Cursor Agent via ACP (Agent Client Protocol).
- * Maintains persistent connections pooled by model — spawns once per model,
- * reuses across all calls with the same model.
- * Uses the user's current Cursor subscription — no API key required if `agent login` was run.
- * See https://cursor.com/docs/cli/acp
+ * Cursor provider using headless --print mode for direct LLM access.
+ * Each call spawns `agent --print` which outputs clean text responses
+ * without the agent behavior that ACP mode forces.
+ * See https://cursor.com/docs/cli/headless
  */
 export class CursorAcpProvider implements LLMProvider {
   private defaultModel: string;
   private cursorApiKey?: string;
-  private connections = new Map<string, AcpConnection>();
-  private connectPromises = new Map<string, Promise<void>>();
-  private shutdownRequested = false;
 
   constructor(config: LLMConfig) {
     this.defaultModel = config.model || 'sonnet-4.6';
     this.cursorApiKey = process.env.CURSOR_API_KEY ?? process.env.CURSOR_AUTH_TOKEN;
-
-    process.once('exit', () => this.shutdown());
   }
 
   async call(options: LLMCallOptions): Promise<string> {
-    const chunks: string[] = [];
-    await this.runPrompt(options, {
-      onText: (text) => chunks.push(text),
-      onEnd: () => {},
-      onError: () => {},
-    });
-    return chunks.join('');
+    const prompt = this.buildPrompt(options);
+    const model = options.model || this.defaultModel;
+    return this.runPrint(model, prompt);
   }
 
   async stream(options: LLMStreamOptions, callbacks: LLMStreamCallbacks): Promise<void> {
-    await this.runPrompt(options, callbacks);
+    const prompt = this.buildPrompt(options);
+    const model = options.model || this.defaultModel;
+    return this.runPrintStream(model, prompt, callbacks);
   }
 
-  shutdown(): void {
-    this.shutdownRequested = true;
-    for (const conn of this.connections.values()) {
-      conn.child.stdin?.end();
-      conn.child.kill('SIGTERM');
-    }
-    this.connections.clear();
-    this.connectPromises.clear();
-  }
+  private buildArgs(model: string, streaming: boolean): string[] {
+    const args = ['--print'];
 
-  // -- Connection pool --------------------------------------------------------
-
-  private resolveModel(options: LLMCallOptions | LLMStreamOptions): string {
-    return options.model || this.defaultModel;
-  }
-
-  private async ensureConnection(model: string): Promise<AcpConnection> {
-    const existing = this.connections.get(model);
-    if (existing && !existing.child.killed) return existing;
-
-    const pending = this.connectPromises.get(model);
-    if (pending) {
-      await pending;
-      return this.connections.get(model)!;
-    }
-
-    const promise = this.connect(model);
-    this.connectPromises.set(model, promise);
-    try {
-      await promise;
-    } catch (err) {
-      this.connectPromises.delete(model);
-      throw err;
-    }
-    return this.connections.get(model)!;
-  }
-
-  private async connect(model: string): Promise<void> {
-    const args = ['acp'];
     if (model && model !== 'auto' && model !== 'default') {
-      args.unshift('--model', model);
+      args.push('--model', model);
     }
+
+    if (streaming) {
+      args.push('--output-format', 'stream-json', '--stream-partial-output');
+    }
+
     if (this.cursorApiKey) {
-      args.unshift('--api-key', this.cursorApiKey);
+      args.push('--api-key', this.cursorApiKey);
     }
 
-    const child = spawn(ACP_AGENT_BIN, args, {
-      stdio: ['pipe', 'pipe', 'ignore'],
-      cwd: process.cwd(),
-      env: { ...process.env, ...(this.cursorApiKey && { CURSOR_API_KEY: this.cursorApiKey }) },
-      ...(IS_WINDOWS && { shell: true }),
-    });
-
-    const conn: AcpConnection = {
-      child,
-      rl: readline.createInterface({ input: child.stdout!, crlfDelay: Infinity }),
-      pending: new Map(),
-      nextId: 1,
-      activeCallbacks: null,
-    };
-
-    conn.rl.on('line', (line) => this.handleLine(conn, line));
-
-    child.on('error', (err) => {
-      for (const w of conn.pending.values()) w.reject(err);
-      conn.pending.clear();
-      conn.activeCallbacks?.onError(err);
-    });
-
-    child.on('close', () => {
-      if (!this.shutdownRequested) {
-        const err = new Error('Cursor agent process exited unexpectedly');
-        for (const w of conn.pending.values()) w.reject(err);
-        conn.pending.clear();
-        conn.activeCallbacks?.onError(err);
-      }
-      this.connections.delete(model);
-      this.connectPromises.delete(model);
-    });
-
-    this.connections.set(model, conn);
-
-    await this.send(conn, 'initialize', {
-      protocolVersion: 1,
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
-      clientInfo: { name: 'caliber', version: '1.0.0' },
-    });
-    await this.send(conn, 'authenticate', { methodId: 'cursor_login' });
+    return args;
   }
 
-  // -- JSON-RPC ---------------------------------------------------------------
-
-  private send(conn: AcpConnection, method: string, params?: Record<string, unknown>): Promise<unknown> {
-    if (!conn.child.stdin) {
-      return Promise.reject(new Error('Cursor agent not connected'));
-    }
+  private runPrint(model: string, prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const id = conn.nextId++;
-      conn.pending.set(id, { resolve, reject });
-      const msg: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
-      conn.child.stdin!.write(JSON.stringify(msg) + '\n', (err) => {
-        if (err) {
-          conn.pending.delete(id);
-          reject(err);
+      const args = this.buildArgs(model, false);
+      const child = spawn(AGENT_BIN, args, {
+        stdio: ['pipe', 'pipe', 'ignore'],
+        env: { ...process.env, ...(this.cursorApiKey && { CURSOR_API_KEY: this.cursorApiKey }) },
+        ...(IS_WINDOWS && { shell: true }),
+      });
+
+      const chunks: Buffer[] = [];
+
+      child.stdout!.on('data', (data: Buffer) => {
+        chunks.push(data);
+      });
+
+      child.on('error', reject);
+
+      child.on('close', (code) => {
+        const output = Buffer.concat(chunks).toString('utf-8').trim();
+        if (code !== 0 && !output) {
+          reject(new Error(`Cursor agent exited with code ${code}`));
+        } else {
+          resolve(output);
         }
       });
+
+      child.stdin!.write(prompt);
+      child.stdin!.end();
     });
   }
 
-  private handleLine(conn: AcpConnection, line: string): void {
-    let msg: JsonRpcResponse & {
-      method?: string;
-      params?: { update?: { sessionUpdate?: string; content?: { text?: string } }; id?: number };
-    };
-    try {
-      msg = JSON.parse(line) as typeof msg;
-    } catch {
-      return;
-    }
-
-    // Response to a send() call
-    if (msg.id != null && (msg.result !== undefined || msg.error !== undefined)) {
-      const waiter = conn.pending.get(msg.id);
-      if (waiter) {
-        conn.pending.delete(msg.id);
-        if (msg.error) {
-          waiter.reject(new Error(msg.error.message || 'ACP error'));
-        } else {
-          waiter.resolve(msg.result);
-        }
-      }
-      if (msg.result && typeof msg.result === 'object' && 'stopReason' in (msg.result as object)) {
-        conn.activeCallbacks?.onEnd({
-          stopReason: (msg.result as { stopReason?: string }).stopReason,
-        });
-      }
-      return;
-    }
-
-    // Streaming text chunks
-    if (msg.method === 'session/update' && msg.params?.update) {
-      const update = msg.params.update;
-      if (update.sessionUpdate === 'agent_message_chunk' && update.content?.text) {
-        conn.activeCallbacks?.onText(update.content.text);
-      }
-      return;
-    }
-
-    // Auto-approve permission requests
-    if (msg.method === 'session/request_permission' && msg.id != null) {
-      const response = JSON.stringify({
-        jsonrpc: '2.0',
-        id: msg.id,
-        result: { outcome: { outcome: 'selected' as const, optionId: 'allow-once' as const } },
-      }) + '\n';
-      conn.child.stdin?.write(response);
-    }
-  }
-
-  // -- Prompt execution -------------------------------------------------------
-
-  private async runPrompt(
-    options: LLMCallOptions | LLMStreamOptions,
-    callbacks: LLMStreamCallbacks
-  ): Promise<void> {
-    const model = this.resolveModel(options);
-    const conn = await this.ensureConnection(model);
-
-    conn.activeCallbacks = callbacks;
-    try {
-      const sessionResult = await this.send(conn, 'session/new', {
-        cwd: os.tmpdir(),
-        mcpServers: [],
-      }) as { sessionId: string };
-
-      await this.send(conn, 'session/prompt', {
-        sessionId: sessionResult.sessionId,
-        prompt: [{ type: 'text', text: this.buildCombinedPrompt(options) }],
+  private runPrintStream(model: string, prompt: string, callbacks: LLMStreamCallbacks): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const args = this.buildArgs(model, true);
+      const child = spawn(AGENT_BIN, args, {
+        stdio: ['pipe', 'pipe', 'ignore'],
+        env: { ...process.env, ...(this.cursorApiKey && { CURSOR_API_KEY: this.cursorApiKey }) },
+        ...(IS_WINDOWS && { shell: true }),
       });
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      callbacks.onError(error);
-      throw error;
-    } finally {
-      conn.activeCallbacks = null;
-    }
+
+      let buffer = '';
+
+      child.stdout!.on('data', (data: Buffer) => {
+        buffer += data.toString('utf-8');
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line) as {
+              type?: string;
+              content?: string;
+              message?: { content?: Array<{ text?: string }> };
+              duration_ms?: number;
+            };
+
+            if (event.type === 'assistant') {
+              const text = event.message?.content?.[0]?.text || event.content;
+              if (text) callbacks.onText(text);
+            } else if (event.type === 'result') {
+              callbacks.onEnd({ stopReason: 'end_turn' });
+            }
+          } catch {
+            // Not JSON — treat as plain text
+            callbacks.onText(line);
+          }
+        }
+      });
+
+      child.on('error', (err) => {
+        callbacks.onError(err);
+        reject(err);
+      });
+
+      child.on('close', (code) => {
+        // Flush remaining buffer
+        if (buffer.trim()) {
+          try {
+            const event = JSON.parse(buffer) as { type?: string; content?: string; message?: { content?: Array<{ text?: string }> }; duration_ms?: number };
+            if (event.type === 'assistant') {
+              const text = event.message?.content?.[0]?.text || event.content;
+              if (text) callbacks.onText(text);
+            } else if (event.type === 'result') {
+              callbacks.onEnd({ stopReason: 'end_turn' });
+            }
+          } catch {
+            callbacks.onText(buffer);
+          }
+        }
+
+        if (code !== 0 && code !== null) {
+          const err = new Error(`Cursor agent exited with code ${code}`);
+          callbacks.onError(err);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+
+      child.stdin!.write(prompt);
+      child.stdin!.end();
+    });
   }
 
-  private buildCombinedPrompt(options: LLMCallOptions | LLMStreamOptions): string {
+  private buildPrompt(options: LLMCallOptions | LLMStreamOptions): string {
     const streamOpts = options as LLMStreamOptions;
     const hasHistory = streamOpts.messages && streamOpts.messages.length > 0;
     let combined = '';
-
-    combined += 'IMPORTANT: You are being used as a direct LLM, not as a coding agent. ';
-    combined += 'Do NOT use tools, do NOT read or write files, do NOT check the repository. ';
-    combined += 'Process the prompt below and output your response directly in your message. ';
-    combined += 'Follow the system instructions exactly.\n\n';
 
     combined += '[[System]]\n' + options.system + '\n\n';
 
@@ -282,7 +176,7 @@ export class CursorAcpProvider implements LLMProvider {
 /** Check if Cursor agent CLI is available (e.g. user ran `cursor.com/install` and optionally `agent login`). */
 export function isCursorAgentAvailable(): boolean {
   try {
-    const cmd = process.platform === 'win32' ? `where ${ACP_AGENT_BIN}` : `which ${ACP_AGENT_BIN}`;
+    const cmd = process.platform === 'win32' ? `where ${AGENT_BIN}` : `which ${AGENT_BIN}`;
     execSync(cmd, { stdio: 'ignore' });
     return true;
   } catch {

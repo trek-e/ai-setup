@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Readable, Writable } from 'node:stream';
+import { EventEmitter } from 'node:events';
+import { Writable } from 'node:stream';
 import { CursorAcpProvider, isCursorAgentAvailable } from '../cursor-acp.js';
 import type { LLMConfig } from '../types.js';
 
@@ -11,33 +12,25 @@ vi.mock('node:child_process', () => ({
   execSync: (...args: unknown[]) => execSync(...args),
 }));
 
-function mockAcpAgent(chunks?: string[]) {
-  const stdout = new Readable({ read: () => {} });
-  const stdin = new Writable({
-    write(chunk: Buffer | string, _enc, cb) {
-      const str = chunk.toString();
-      for (const line of str.split('\n').filter(Boolean)) {
-        try {
-          const msg = JSON.parse(line) as { id?: number; method?: string };
-          if (msg.id == null) continue;
-          if (msg.method === 'initialize') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
-          else if (msg.method === 'authenticate') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
-          else if (msg.method === 'session/new') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 's' } }) + '\n');
-          else if (msg.method === 'session/prompt') {
-            for (const text of (chunks ?? [])) {
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { text } } } }) + '\n');
-            }
-            stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } }) + '\n');
-          }
-        } catch {
-          // ignore
-        }
-      }
-      cb();
-    },
-  });
-  spawn.mockReturnValue({ stdin, stdout, stderr: process.stderr, on: vi.fn(), kill: vi.fn(), killed: false });
-  return { stdin, stdout };
+function mockPrintAgent(output: string, exitCode = 0) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdin: Writable;
+    stdout: EventEmitter;
+    kill: ReturnType<typeof vi.fn>;
+  };
+  child.stdout = new EventEmitter();
+  child.stdin = new Writable({ write(_chunk, _enc, cb) { cb(); } });
+  child.kill = vi.fn();
+
+  spawn.mockReturnValue(child);
+
+  // Emit output and close async
+  setTimeout(() => {
+    child.stdout.emit('data', Buffer.from(output));
+    child.emit('close', exitCode);
+  }, 0);
+
+  return child;
 }
 
 describe('CursorAcpProvider', () => {
@@ -54,60 +47,76 @@ describe('CursorAcpProvider', () => {
     process.env = originalEnv;
   });
 
-  it('call() returns concatenated agent_message_chunk text', async () => {
-    mockAcpAgent(['Hello!', ' World.']);
+  it('call() returns text output from --print mode', async () => {
+    mockPrintAgent('{"languages":["TypeScript"]}');
 
     const provider = new CursorAcpProvider({ provider: 'cursor', model: 'sonnet-4.6' });
-    const result = await provider.call({ system: 'You are a helper.', prompt: 'Say hello.' });
+    const result = await provider.call({ system: 'Return JSON.', prompt: 'Detect stack.' });
 
-    expect(result).toBe('Hello! World.');
-    expect(spawn).toHaveBeenCalledWith('agent', ['--model', 'sonnet-4.6', 'acp'], expect.any(Object));
-    provider.shutdown();
+    expect(result).toBe('{"languages":["TypeScript"]}');
+    expect(spawn).toHaveBeenCalledWith(
+      'agent',
+      ['--print', '--model', 'sonnet-4.6'],
+      expect.any(Object),
+    );
   });
 
-  it('includes --api-key in spawn args when CURSOR_API_KEY is set', async () => {
+  it('includes --api-key when CURSOR_API_KEY is set', async () => {
     process.env.CURSOR_API_KEY = 'test-key';
-    mockAcpAgent();
+    mockPrintAgent('ok');
 
     const provider = new CursorAcpProvider({ provider: 'cursor', model: 'sonnet-4.6' });
     await provider.call({ system: 'S', prompt: 'P' });
 
-    expect(spawn).toHaveBeenCalledWith('agent', ['--api-key', 'test-key', '--model', 'sonnet-4.6', 'acp'], expect.any(Object));
-    provider.shutdown();
-  });
-
-  it('reuses the same process for calls with the same model', async () => {
-    mockAcpAgent();
-
-    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'sonnet-4.6' });
-    await provider.call({ system: 'S', prompt: 'P1' });
-    await provider.call({ system: 'S', prompt: 'P2' });
-
-    expect(spawn).toHaveBeenCalledTimes(1);
-    provider.shutdown();
-  });
-
-  it('spawns separate processes for different models', async () => {
-    mockAcpAgent();
-
-    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'sonnet-4.6' });
-    await provider.call({ system: 'S', prompt: 'P1' });
-    await provider.call({ system: 'S', prompt: 'P2', model: 'gpt-5.3-codex-fast' });
-
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(spawn).toHaveBeenNthCalledWith(1, 'agent', ['--model', 'sonnet-4.6', 'acp'], expect.any(Object));
-    expect(spawn).toHaveBeenNthCalledWith(2, 'agent', ['--model', 'gpt-5.3-codex-fast', 'acp'], expect.any(Object));
-    provider.shutdown();
+    expect(spawn).toHaveBeenCalledWith(
+      'agent',
+      ['--print', '--model', 'sonnet-4.6', '--api-key', 'test-key'],
+      expect.any(Object),
+    );
   });
 
   it('does not include --model when model is "auto"', async () => {
-    mockAcpAgent();
+    mockPrintAgent('ok');
 
     const provider = new CursorAcpProvider({ provider: 'cursor', model: 'auto' });
     await provider.call({ system: 'S', prompt: 'P' });
 
-    expect(spawn).toHaveBeenCalledWith('agent', ['acp'], expect.any(Object));
-    provider.shutdown();
+    expect(spawn).toHaveBeenCalledWith(
+      'agent',
+      ['--print'],
+      expect.any(Object),
+    );
+  });
+
+  it('stream() emits text from stream-json events', async () => {
+    const events = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ text: 'Hello' }] } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ text: ' World' }] } }),
+      JSON.stringify({ type: 'result', duration_ms: 100 }),
+    ].join('\n') + '\n';
+
+    mockPrintAgent(events);
+
+    const chunks: string[] = [];
+    let ended = false;
+    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'sonnet-4.6' });
+
+    await provider.stream(
+      { system: 'S', prompt: 'P' },
+      {
+        onText: (text) => chunks.push(text),
+        onEnd: () => { ended = true; },
+        onError: () => {},
+      },
+    );
+
+    expect(chunks).toEqual(['Hello', ' World']);
+    expect(ended).toBe(true);
+    expect(spawn).toHaveBeenCalledWith(
+      'agent',
+      ['--print', '--model', 'sonnet-4.6', '--output-format', 'stream-json', '--stream-partial-output'],
+      expect.any(Object),
+    );
   });
 
   it('uses CURSOR_API_KEY from env when set', () => {
@@ -115,7 +124,6 @@ describe('CursorAcpProvider', () => {
     const config: LLMConfig = { provider: 'cursor', model: 'default' };
     const provider = new CursorAcpProvider(config);
     expect(provider).toBeDefined();
-    provider.shutdown();
   });
 });
 
