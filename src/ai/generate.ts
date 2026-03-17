@@ -1,6 +1,7 @@
 import type { Fingerprint } from '../fingerprint/index.js';
 import { getProvider, llmJsonCall, TRANSIENT_ERRORS } from '../llm/index.js';
 import { getFastModel } from '../llm/config.js';
+import { estimateTokens } from '../llm/utils.js';
 import { CORE_GENERATION_PROMPT, GENERATION_SYSTEM_PROMPT, SKILL_GENERATION_PROMPT } from './prompts.js';
 import { extractAllDeps } from '../utils/dependencies.js';
 
@@ -507,6 +508,8 @@ export async function generateSkillsForSetup(
   return succeeded;
 }
 
+const MAX_PROMPT_TOKENS = 120_000;
+
 const LIMITS = {
   FILE_TREE_ENTRIES: 500,
   EXISTING_CONFIG_CHARS: 8000,
@@ -518,6 +521,57 @@ const LIMITS = {
 function truncate(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) + `\n... (truncated at ${maxChars} chars)`;
+}
+
+export function sampleFileTree(fileTree: string[], codeAnalysisPaths: string[], limit: number): string[] {
+  if (fileTree.length <= limit) return fileTree;
+
+  // getFileTree returns dirs sorted by most-recent-child mtime, then files sorted by mtime.
+  // Separate them so we can apply budget allocation.
+  const dirs: string[] = [];
+  const rootFiles: string[] = [];
+  const nestedFiles: string[] = [];
+
+  for (const entry of fileTree) {
+    if (entry.endsWith('/')) {
+      dirs.push(entry);
+    } else if (!entry.includes('/')) {
+      rootFiles.push(entry);
+    } else {
+      nestedFiles.push(entry);
+    }
+  }
+
+  const result: string[] = [];
+  const included = new Set<string>();
+
+  function add(entry: string) {
+    if (!included.has(entry)) {
+      included.add(entry);
+      result.push(entry);
+    }
+  }
+
+  // 1. Directories (already sorted by activity from getFileTree)
+  const dirBudget = Math.min(dirs.length, Math.floor(limit * 0.4));
+  for (let i = 0; i < dirBudget; i++) add(dirs[i]);
+
+  // 2. Root-level files (config, README, etc.)
+  for (const f of rootFiles.slice(0, 50)) add(f);
+
+  // 3. Code analysis paths (priority-sorted by git freq + imports + file type)
+  for (const p of codeAnalysisPaths) {
+    if (result.length >= limit) break;
+    if (fileTree.includes(p)) add(p);
+  }
+
+  // 4. Remaining files by mtime (nestedFiles already sorted by mtime from getFileTree)
+  for (const f of nestedFiles) {
+    if (result.length >= limit) break;
+    add(f);
+  }
+
+  return result.slice(0, limit);
 }
 
 export function buildGeneratePrompt(
@@ -583,8 +637,9 @@ export function buildGeneratePrompt(
   if (fingerprint.frameworks.length > 0) parts.push(`Frameworks: ${fingerprint.frameworks.join(', ')}`);
   if (fingerprint.description) parts.push(`Project description: ${fingerprint.description}`);
   if (fingerprint.fileTree.length > 0) {
-    const tree = fingerprint.fileTree.slice(0, LIMITS.FILE_TREE_ENTRIES);
-    parts.push(`\nFile tree (top-level, ${tree.length}/${fingerprint.fileTree.length}):\n${tree.join('\n')}`);
+    const caPaths = fingerprint.codeAnalysis?.files.map(f => f.path) ?? [];
+    const tree = sampleFileTree(fingerprint.fileTree, caPaths, LIMITS.FILE_TREE_ENTRIES);
+    parts.push(`\nFile tree (${tree.length}/${fingerprint.fileTree.length}):\n${tree.join('\n')}`);
   }
 
   if (existing.claudeMd) parts.push(`\nExisting CLAUDE.md:\n${truncate(existing.claudeMd, LIMITS.EXISTING_CONFIG_CHARS)}`);
@@ -623,27 +678,6 @@ export function buildGeneratePrompt(
     }
   }
 
-  if (fingerprint.codeAnalysis) {
-    const ca = fingerprint.codeAnalysis;
-
-    if (ca.truncated) {
-      const pct = ca.totalProjectTokens > 0
-        ? Math.round((ca.includedTokens / ca.totalProjectTokens) * 100)
-        : 100;
-      parts.push(`\n--- Project Files (trimmed to ~${ca.includedTokens.toLocaleString()}/${ca.totalProjectTokens.toLocaleString()} tokens, ${pct}% of total) ---`);
-    } else {
-      parts.push(`\n--- Project Files (${ca.files.length} files, ~${ca.includedTokens.toLocaleString()} tokens) ---`);
-    }
-
-    parts.push('Study these files to extract patterns for skills. Use the exact code patterns you see here.\n');
-
-    for (const f of ca.files) {
-      parts.push(`[${f.path}]`);
-      parts.push(f.content);
-      parts.push('');
-    }
-  }
-
   const allDeps = extractAllDeps(process.cwd());
   if (allDeps.length > 0) {
     parts.push(`\nProject dependencies (${allDeps.length}):`);
@@ -651,6 +685,48 @@ export function buildGeneratePrompt(
   }
 
   if (prompt) parts.push(`\nUser instructions: ${prompt}`);
+
+  if (fingerprint.codeAnalysis) {
+    const ca = fingerprint.codeAnalysis;
+    const basePrompt = parts.join('\n');
+    const baseTokens = estimateTokens(basePrompt);
+    const tokenBudgetForCode = Math.max(0, MAX_PROMPT_TOKENS - baseTokens);
+
+    const codeLines: string[] = [];
+    let codeChars = 0;
+
+    codeLines.push('Study these files to extract patterns for skills. Use the exact code patterns you see here.\n');
+
+    const sortedFiles = [...ca.files].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
+    let includedFiles = 0;
+    for (const f of sortedFiles) {
+      const entry = `[${f.path}]\n${f.content}\n`;
+      if (estimateTokens(codeLines.join('\n') + entry) > tokenBudgetForCode && includedFiles > 0) break;
+      codeLines.push(entry);
+      codeChars += f.content.length;
+      includedFiles++;
+    }
+
+    const includedTokens = Math.ceil(codeChars / 4);
+    let header: string;
+    if (includedFiles < ca.files.length) {
+      const pct = ca.totalProjectTokens > 0
+        ? Math.round((includedTokens / ca.totalProjectTokens) * 100)
+        : 100;
+      header = `\n--- Project Files (trimmed to ~${includedTokens.toLocaleString()}/${ca.totalProjectTokens.toLocaleString()} tokens, ${pct}% of total) ---`;
+    } else if (ca.truncated) {
+      const pct = ca.totalProjectTokens > 0
+        ? Math.round((ca.includedTokens / ca.totalProjectTokens) * 100)
+        : 100;
+      header = `\n--- Project Files (trimmed to ~${ca.includedTokens.toLocaleString()}/${ca.totalProjectTokens.toLocaleString()} tokens, ${pct}% of total) ---`;
+    } else {
+      header = `\n--- Project Files (${ca.files.length} files, ~${ca.includedTokens.toLocaleString()} tokens) ---`;
+    }
+
+    parts.push(header);
+    parts.push(codeLines.join('\n'));
+  }
 
   return parts.join('\n');
 }

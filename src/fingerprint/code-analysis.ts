@@ -64,13 +64,14 @@ const SOURCE_EXTENSIONS = new Set([
   '.scala', '.cs', '.c', '.cpp', '.h', '.hpp', '.swift', '.php',
 ]);
 
-const TOKEN_BUDGET = 180_000;
+const TOKEN_BUDGET = 80_000;
 const CHAR_BUDGET = TOKEN_BUDGET * 4;
 
 export interface ProjectFile {
   path: string;
   content: string;
   size: number;
+  priority: number;
 }
 
 export interface CodeAnalysis {
@@ -415,7 +416,7 @@ export function analyzeCode(dir: string): CodeAnalysis {
     const unique = group.slice(1).filter(f => structuralFingerprint(f.compressed, f.ext) !== repFP);
 
     // Representative gets full compressed content
-    const repEntry = { path: rep.path, content: rep.compressed, size: rep.compressed.length };
+    const repEntry = { path: rep.path, content: rep.compressed, size: rep.compressed.length, priority: rep.score };
     const repSize = rep.path.length + rep.compressed.length + 10;
     if (includedChars + repSize <= CHAR_BUDGET) {
       result.push(repEntry);
@@ -429,7 +430,7 @@ export function analyzeCode(dir: string): CodeAnalysis {
       const summary = `(${similar.length} similar file${similar.length === 1 ? '' : 's'} in ${dirPath}/: ${names.join(', ')})`;
       const summarySize = summary.length + 30;
       if (includedChars + summarySize <= CHAR_BUDGET) {
-        result.push({ path: `[similar to ${rep.path}]`, content: summary, size: summary.length });
+        result.push({ path: `[similar to ${rep.path}]`, content: summary, size: summary.length, priority: rep.score });
         includedChars += summarySize;
       }
     }
@@ -438,7 +439,7 @@ export function analyzeCode(dir: string): CodeAnalysis {
     for (const f of unique) {
       const skeletonSize = f.path.length + f.skeleton.length + 10;
       if (includedChars + skeletonSize <= CHAR_BUDGET) {
-        result.push({ path: f.path, content: f.skeleton, size: f.skeleton.length });
+        result.push({ path: f.path, content: f.skeleton, size: f.skeleton.length, priority: f.score });
         includedChars += skeletonSize;
       }
     }
@@ -450,7 +451,7 @@ export function analyzeCode(dir: string): CodeAnalysis {
     if (includedPaths.has(f.path)) continue;
     const skeletonSize = f.path.length + f.skeleton.length + 10;
     if (includedChars + skeletonSize > CHAR_BUDGET) continue;
-    result.push({ path: f.path, content: f.skeleton, size: f.skeleton.length });
+    result.push({ path: f.path, content: f.skeleton, size: f.skeleton.length, priority: f.score });
     includedChars += skeletonSize;
   }
 
