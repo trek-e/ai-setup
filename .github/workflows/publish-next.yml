@@ -1,17 +1,21 @@
 name: Publish next to npm
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [next]
 
 jobs:
   publish-next:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: next
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -20,8 +24,6 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
       - run: npm run build
 
       - name: Smoke test build
