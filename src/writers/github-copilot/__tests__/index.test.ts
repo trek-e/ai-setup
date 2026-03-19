@@ -25,9 +25,9 @@ describe('writeGithubCopilotConfig', () => {
     });
 
     expect(written).toEqual(['.github/copilot-instructions.md']);
-    expect(fs.readFileSync('.github/copilot-instructions.md', 'utf-8')).toBe(
-      '# Project\n\nBuild with `npm run build`.',
-    );
+    const content = fs.readFileSync('.github/copilot-instructions.md', 'utf-8');
+    expect(content).toContain('# Project\n\nBuild with `npm run build`.');
+    expect(content).toContain('caliber:managed:pre-commit');
   });
 
   it('skips writing when instructions is empty', () => {

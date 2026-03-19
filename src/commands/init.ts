@@ -8,7 +8,6 @@ import { generateSetup, generateSkillsForSetup } from '../ai/generate.js';
 import { writeSetup, undoSetup } from '../writers/index.js';
 import { stageFiles, cleanupStaging } from '../writers/staging.js';
 import { collectSetupFiles } from './setup-files.js';
-import { installHook, installPreCommitHook } from '../lib/hooks.js';
 import { installLearningHooks, installCursorLearningHooks } from '../lib/learning-hooks.js';
 import { writeState, getCurrentHeadSha } from '../lib/state.js';
 import { promptInput } from '../utils/prompt.js';
@@ -41,8 +40,8 @@ import {
   trackInitLearnEnabled,
 } from '../telemetry/events.js';
 
-import { detectAgents, promptAgent, promptHookType, promptLearnInstall, promptReviewAction, refineLoop } from './init-prompts.js';
-import type { TargetAgent, HookChoice } from './init-prompts.js';
+import { detectAgents, promptAgent, promptLearnInstall, promptReviewAction, refineLoop } from './init-prompts.js';
+import type { TargetAgent } from './init-prompts.js';
 import { formatProjectPreview, formatWhatChanged, printSetupSummary, displayTokenUsage } from './init-display.js';
 import { isFirstRun, summarizeSetup, ensurePermissions, writeErrorLog, evaluateDismissals } from './init-helpers.js';
 
@@ -625,71 +624,10 @@ export async function initCommand(options: InitOptions) {
     }
   }
 
-  // Auto-sync hooks (smart defaults: auto-install pre-commit on first run)
+  // Docs auto-refresh is now handled via instructions in generated config files
   console.log('');
-  let hookChoice: HookChoice;
-  if (options.autoApprove) {
-    hookChoice = 'skip';
-    log(options.verbose, 'Auto-approve: skipping hook installation');
-  } else if (firstRun) {
-    // Auto-install pre-commit hook on first run
-    const precommitResult = installPreCommitHook();
-    if (precommitResult.installed) {
-      console.log(`  ${chalk.green('✓')} Pre-commit hook installed — docs refresh before each commit`);
-      console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
-      hookChoice = 'precommit';
-    } else if (precommitResult.alreadyInstalled) {
-      console.log(chalk.dim('  Pre-commit hook already installed'));
-      hookChoice = 'precommit';
-    } else {
-      hookChoice = 'skip';
-    }
-
-    // Ask about Claude hook only if Claude is a target
-    if (targetAgent.includes('claude')) {
-      const { default: select } = await import('@inquirer/select');
-      const wantsClaude = await select({
-        message: 'Also install Claude Code session hook? (auto-refresh on session end)',
-        choices: [
-          { name: 'Yes', value: true },
-          { name: 'No', value: false },
-        ],
-      });
-      if (wantsClaude) {
-        const hookResult = installHook();
-        if (hookResult.installed) {
-          console.log(`  ${chalk.green('✓')} Claude Code hook installed`);
-        }
-        hookChoice = hookChoice === 'precommit' ? 'both' : 'claude';
-      }
-    }
-  } else {
-    hookChoice = await promptHookType(targetAgent);
-    if (hookChoice === 'claude' || hookChoice === 'both') {
-      const hookResult = installHook();
-      if (hookResult.installed) {
-        console.log(`  ${chalk.green('✓')} Claude Code hook installed — docs update on session end`);
-        console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
-      } else if (hookResult.alreadyInstalled) {
-        console.log(chalk.dim('  Claude Code hook already installed'));
-      }
-    }
-    if (hookChoice === 'precommit' || hookChoice === 'both') {
-      const precommitResult = installPreCommitHook();
-      if (precommitResult.installed) {
-        console.log(`  ${chalk.green('✓')} Pre-commit hook installed — docs refresh before each commit`);
-        console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
-      } else if (precommitResult.alreadyInstalled) {
-        console.log(chalk.dim('  Pre-commit hook already installed'));
-      } else {
-        console.log(chalk.yellow('  Could not install pre-commit hook (not a git repository?)'));
-      }
-    }
-    if (hookChoice === 'skip') {
-      console.log(chalk.dim('  Skipped auto-sync hooks. Run ') + chalk.hex('#83D1EB')('caliber hooks --install') + chalk.dim(' later to enable.'));
-    }
-  }
-  trackInitHookSelected(hookChoice);
+  console.log(`  ${chalk.green('✓')} Docs auto-refresh          ${chalk.dim('agents run caliber refresh before commits')}`);
+  trackInitHookSelected('config-instructions');
 
   // Session Learning prompt
   const hasLearnableAgent = targetAgent.includes('claude') || targetAgent.includes('cursor');
@@ -731,14 +669,7 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.bold('  What was set up:\n'));
 
   console.log(`    ${done}  Config generated          ${title('caliber score')} ${chalk.dim('for full breakdown')}`);
-
-  const hooksInstalled = hookChoice !== 'skip';
-  if (hooksInstalled) {
-    const hookLabel = hookChoice === 'both' ? 'pre-commit + Claude Code' : hookChoice === 'precommit' ? 'pre-commit' : 'Claude Code';
-    console.log(`    ${done}  Auto-sync hooks           ${chalk.dim(hookLabel + ' — docs stay fresh automatically')}`);
-  } else {
-    console.log(`    ${skip}  Auto-sync hooks           ${title('caliber hooks --install')} to enable later`);
-  }
+  console.log(`    ${done}  Docs auto-refresh        ${chalk.dim('agents run caliber refresh before commits')}`);
 
   if (hasLearnableAgent) {
     if (enableLearn) {

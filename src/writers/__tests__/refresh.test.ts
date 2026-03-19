@@ -18,7 +18,8 @@ describe('writeRefreshDocs', () => {
 
     expect(written).toContain('CLAUDE.md');
     const content = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
-    expect(content).toBe('# Project\n\nUpdated content.\n');
+    expect(content).toContain('# Project\n\nUpdated content.');
+    expect(content).toContain('caliber:managed:pre-commit');
   });
 
   it('writes other doc types normally', () => {
