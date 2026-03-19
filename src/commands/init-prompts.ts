@@ -12,7 +12,6 @@ import { promptReviewMethod, openReview } from '../utils/review.js';
 import type { StageResult } from '../writers/staging.js';
 
 export type TargetAgent = ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
-export type HookChoice = 'claude' | 'precommit' | 'both' | 'skip';
 type ReviewAction = 'accept' | 'refine' | 'decline';
 
 export function detectAgents(dir: string): TargetAgent {
@@ -46,23 +45,6 @@ export async function promptAgent(detected?: TargetAgent): Promise<TargetAgent> 
     },
   });
   return selected;
-}
-
-export async function promptHookType(targetAgent: TargetAgent): Promise<HookChoice> {
-  const choices: Array<{ name: string; value: HookChoice }> = [];
-  const hasClaude = targetAgent.includes('claude');
-
-  choices.push({ name: 'Git pre-commit hook — refresh before each commit (recommended)', value: 'precommit' });
-  if (hasClaude) {
-    choices.push({ name: 'Claude Code hook — auto-refresh on session end', value: 'claude' });
-    choices.push({ name: 'Both (pre-commit + Claude Code)', value: 'both' });
-  }
-  choices.push({ name: 'Skip for now', value: 'skip' });
-
-  return select({
-    message: 'Keep your AI docs & skills in sync as your code evolves?',
-    choices,
-  });
 }
 
 export async function promptLearnInstall(targetAgent: TargetAgent): Promise<boolean> {
