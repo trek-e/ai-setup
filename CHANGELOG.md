@@ -1,3 +1,17 @@
+## v1.25.0 (2026-03-19)
+
+### Features
+
+- replace pre-commit hooks with config-file instructions
+- add external context sources for multi-repo awareness (#33)
+- **learn**: validate learning system with honest ROI, attribution, and user curation
+- add GitHub Copilot support (#28)
+
+### Bug Fixes
+
+- use forward-slash paths in refresh writer for Windows compatibility
+- use forward-slash paths in copilot writer for Windows compatibility
+
 ## v1.24.1 (2026-03-19)
 
 ## v1.24.0 (2026-03-18)
