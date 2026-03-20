@@ -47,7 +47,7 @@ export const ROIStats: React.FC = () => {
         style={{
           position: "absolute",
           top: "10%",
-          fontSize: 14,
+          fontSize: 18,
           fontFamily: theme.fontMono,
           color: theme.textMuted,
           textTransform: "uppercase",
@@ -63,7 +63,7 @@ export const ROIStats: React.FC = () => {
         style={{
           position: "absolute",
           top: "17%",
-          fontSize: 30,
+          fontSize: 38,
           fontWeight: 700,
           fontFamily: theme.fontSans,
           color: theme.text,
@@ -129,7 +129,7 @@ export const ROIStats: React.FC = () => {
               {/* Big number */}
               <div
                 style={{
-                  fontSize: 48,
+                  fontSize: 56,
                   fontWeight: 800,
                   fontFamily: theme.fontSans,
                   color: stat.color,
@@ -145,7 +145,7 @@ export const ROIStats: React.FC = () => {
               {/* Label */}
               <div
                 style={{
-                  fontSize: 16,
+                  fontSize: 19,
                   fontWeight: 600,
                   fontFamily: theme.fontSans,
                   color: theme.text,
@@ -159,7 +159,7 @@ export const ROIStats: React.FC = () => {
               {/* Description */}
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 14,
                   fontFamily: theme.fontSans,
                   color: theme.textMuted,
                   textAlign: "center",

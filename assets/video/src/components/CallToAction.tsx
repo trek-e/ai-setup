@@ -36,7 +36,7 @@ export const CallToAction: React.FC = () => {
       {/* Brand name */}
       <div
         style={{
-          fontSize: 48,
+          fontSize: 64,
           fontWeight: 700,
           fontFamily: theme.fontSans,
           letterSpacing: "-0.03em",
@@ -64,8 +64,8 @@ export const CallToAction: React.FC = () => {
           gap: 8,
         }}
       >
-        <span style={{ color: theme.textMuted, fontFamily: theme.fontMono, fontSize: 16 }}>$</span>
-        <span style={{ color: theme.text, fontFamily: theme.fontMono, fontSize: 16, fontWeight: 500 }}>
+        <span style={{ color: theme.textMuted, fontFamily: theme.fontMono, fontSize: 20 }}>$</span>
+        <span style={{ color: theme.text, fontFamily: theme.fontMono, fontSize: 20, fontWeight: 500 }}>
           npx @rely-ai/caliber init
         </span>
       </div>
@@ -74,7 +74,7 @@ export const CallToAction: React.FC = () => {
       <div
         style={{
           marginTop: 20,
-          fontSize: 18,
+          fontSize: 24,
           fontFamily: theme.fontSans,
           color: theme.textSecondary,
           opacity: taglineOpacity,
@@ -98,7 +98,7 @@ export const CallToAction: React.FC = () => {
           <span
             key={link}
             style={{
-              fontSize: 13,
+              fontSize: 16,
               fontFamily: theme.fontSans,
               color: theme.textMuted,
               fontWeight: 500,

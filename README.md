@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/demo.gif" alt="Caliber — AI setup tailored for your codebase" width="900">
+  <video src="assets/demo-video.mp4" autoplay loop muted playsinline width="900"></video>
 </p>
 
 <p align="center">

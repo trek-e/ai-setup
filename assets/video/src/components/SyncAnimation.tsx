@@ -37,7 +37,7 @@ export const SyncAnimation: React.FC = () => {
         style={{
           position: "absolute",
           top: "8%",
-          fontSize: 14,
+          fontSize: 18,
           fontFamily: theme.fontMono,
           color: theme.textMuted,
           textTransform: "uppercase",
@@ -53,7 +53,7 @@ export const SyncAnimation: React.FC = () => {
         style={{
           position: "absolute",
           top: "15%",
-          fontSize: 28,
+          fontSize: 36,
           fontWeight: 700,
           fontFamily: theme.fontSans,
           color: theme.text,
@@ -95,7 +95,7 @@ export const SyncAnimation: React.FC = () => {
               git diff
             </span>
           </div>
-          <div style={{ fontFamily: theme.fontMono, fontSize: 12, lineHeight: 1.9 }}>
+          <div style={{ fontFamily: theme.fontMono, fontSize: 15, lineHeight: 1.9 }}>
             <div>
               <span style={{ color: theme.green, fontWeight: 600 }}>+</span>
               <span style={{ color: "#c4b5fd" }}> export function </span>
@@ -111,7 +111,7 @@ export const SyncAnimation: React.FC = () => {
               <span style={{ color: "#c4b5fd" }}> export function </span>
               <span style={{ color: theme.text }}>rateLimit</span>
             </div>
-            <div style={{ marginTop: 6, color: theme.textMuted, fontSize: 10 }}>
+            <div style={{ marginTop: 6, color: theme.textMuted, fontSize: 13 }}>
               src/lib/auth.ts — 3 new exports
             </div>
           </div>
@@ -187,10 +187,10 @@ export const SyncAnimation: React.FC = () => {
               >
                 <file.Icon size={18} color={file.color} />
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ color: theme.text, fontSize: 13, fontFamily: theme.fontMono, fontWeight: 500 }}>
+                  <span style={{ color: theme.text, fontSize: 16, fontFamily: theme.fontMono, fontWeight: 500 }}>
                     {file.name}
                   </span>
-                  <span style={{ color: theme.textMuted, fontSize: 10, fontFamily: theme.fontSans }}>
+                  <span style={{ color: theme.textMuted, fontSize: 13, fontFamily: theme.fontSans }}>
                     {file.platform}
                   </span>
                 </div>
@@ -226,7 +226,7 @@ export const SyncAnimation: React.FC = () => {
             boxShadow: `0 0 ${6 + loopPulse * 4}px ${theme.green}60`,
           }}
         />
-        <span style={{ color: theme.textSecondary, fontSize: 13, fontFamily: theme.fontSans, fontWeight: 500 }}>
+        <span style={{ color: theme.textSecondary, fontSize: 17, fontFamily: theme.fontSans, fontWeight: 500 }}>
           Every push. Every branch. Always in sync.
         </span>
       </div>

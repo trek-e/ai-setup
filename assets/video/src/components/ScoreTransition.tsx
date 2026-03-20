@@ -53,7 +53,7 @@ export const ScoreTransition: React.FC = () => {
         style={{
           position: "absolute",
           top: "10%",
-          fontSize: 14,
+          fontSize: 18,
           fontFamily: theme.fontMono,
           color: theme.textMuted,
           textTransform: "uppercase",
@@ -79,7 +79,7 @@ export const ScoreTransition: React.FC = () => {
           <span
             style={{
               color: theme.text,
-              fontSize: 64,
+              fontSize: 80,
               fontWeight: 700,
               fontFamily: theme.fontSans,
               fontVariantNumeric: "tabular-nums",
@@ -88,7 +88,7 @@ export const ScoreTransition: React.FC = () => {
           >
             {score}
           </span>
-          <span style={{ color: theme.textMuted, fontSize: 20, fontFamily: theme.fontSans }}>/100</span>
+          <span style={{ color: theme.textMuted, fontSize: 26, fontFamily: theme.fontSans }}>/100</span>
           <div
             style={{
               marginLeft: "auto",
@@ -97,7 +97,7 @@ export const ScoreTransition: React.FC = () => {
               backgroundColor: `${scoreColor}15`,
               border: `1px solid ${scoreColor}30`,
               color: scoreColor,
-              fontSize: 22,
+              fontSize: 28,
               fontWeight: 700,
               fontFamily: theme.fontSans,
             }}
@@ -147,14 +147,14 @@ export const ScoreTransition: React.FC = () => {
                     width: 20,
                     textAlign: "center",
                     color: symbolColor,
-                    fontSize: 14,
+                    fontSize: 18,
                     fontFamily: theme.fontMono,
                     fontWeight: 600,
                   }}
                 >
                   {symbol}
                 </span>
-                <span style={{ color: theme.textSecondary, fontSize: 14, fontFamily: theme.fontSans }}>
+                <span style={{ color: theme.textSecondary, fontSize: 18, fontFamily: theme.fontSans }}>
                   {check.label}
                 </span>
               </div>
@@ -168,7 +168,7 @@ export const ScoreTransition: React.FC = () => {
         style={{
           position: "absolute",
           bottom: "12%",
-          fontSize: 16,
+          fontSize: 22,
           fontFamily: theme.fontSans,
           color: theme.textMuted,
           opacity: interpolate(frame, [48, 58], [0, 1], { extrapolateRight: "clamp" }),

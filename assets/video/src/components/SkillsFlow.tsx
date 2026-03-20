@@ -35,13 +35,13 @@ export const SkillsFlow: React.FC = () => {
       {/* Section label */}
       <div
         style={{
-          fontSize: 14,
+          fontSize: 18,
           fontFamily: theme.fontMono,
           color: theme.textMuted,
           textTransform: "uppercase",
           letterSpacing: "0.15em",
           opacity: headerOpacity,
-          marginBottom: 6,
+          marginBottom: 8,
         }}
       >
         Community Skills
@@ -50,7 +50,7 @@ export const SkillsFlow: React.FC = () => {
       {/* Headline */}
       <div
         style={{
-          fontSize: 30,
+          fontSize: 38,
           fontWeight: 700,
           fontFamily: theme.fontSans,
           color: theme.text,
@@ -85,7 +85,7 @@ export const SkillsFlow: React.FC = () => {
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span
                   style={{
-                    fontSize: 14,
+                    fontSize: 17,
                     fontWeight: 600,
                     fontFamily: theme.fontSans,
                     color: reg.color,
@@ -93,7 +93,7 @@ export const SkillsFlow: React.FC = () => {
                 >
                   {reg.name}
                 </span>
-                <span style={{ fontSize: 10, color: theme.textMuted, fontFamily: theme.fontSans }}>
+                <span style={{ fontSize: 13, color: theme.textMuted, fontFamily: theme.fontSans }}>
                   {reg.desc}
                 </span>
               </div>
@@ -147,11 +147,11 @@ export const SkillsFlow: React.FC = () => {
                 transform: `translateY(${interpolate(s, [0, 1], [14, 0])}px) scale(${interpolate(s, [0, 1], [0.95, 1])})`,
               }}
             >
-              <span style={{ fontSize: 13, opacity: 0.6 }}>{skill.icon}</span>
+              <span style={{ fontSize: 16, opacity: 0.6 }}>{skill.icon}</span>
               <span
                 style={{
                   color: theme.text,
-                  fontSize: 13,
+                  fontSize: 16,
                   fontWeight: 500,
                   fontFamily: theme.fontMono,
                 }}

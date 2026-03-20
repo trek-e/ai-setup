@@ -59,7 +59,7 @@ export const EcosystemHub: React.FC = () => {
       {/* Brand name */}
       <div
         style={{
-          fontSize: 48,
+          fontSize: 64,
           fontWeight: 700,
           fontFamily: theme.fontSans,
           letterSpacing: "-0.03em",
@@ -76,11 +76,11 @@ export const EcosystemHub: React.FC = () => {
       {/* Tagline */}
       <div
         style={{
-          fontSize: 18,
+          fontSize: 24,
           fontFamily: theme.fontSans,
           color: theme.textSecondary,
           opacity: taglineOpacity,
-          marginTop: 6,
+          marginTop: 8,
           fontWeight: 400,
         }}
       >
@@ -150,7 +150,7 @@ export const EcosystemHub: React.FC = () => {
                 backgroundColor: theme.surface,
                 border: `1px solid ${theme.surfaceBorder}`,
                 color: theme.text,
-                fontSize: 13,
+                fontSize: 16,
                 fontWeight: 500,
                 fontFamily: theme.fontSans,
                 opacity: s,
