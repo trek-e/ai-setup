@@ -89,7 +89,7 @@ export function resolveFromEnv(): LLMConfig | null {
   if (process.env.CALIBER_USE_CURSOR_SEAT === '1' || process.env.CALIBER_USE_CURSOR_SEAT === 'true') {
     return {
       provider: 'cursor',
-      model: DEFAULT_MODELS.cursor,
+      model: process.env.CALIBER_MODEL || DEFAULT_MODELS.cursor,
     };
   }
 
@@ -97,7 +97,7 @@ export function resolveFromEnv(): LLMConfig | null {
   if (process.env.CALIBER_USE_CLAUDE_CLI === '1' || process.env.CALIBER_USE_CLAUDE_CLI === 'true') {
     return {
       provider: 'claude-cli',
-      model: DEFAULT_MODELS['claude-cli'],
+      model: process.env.CALIBER_MODEL || DEFAULT_MODELS['claude-cli'],
     };
   }
 

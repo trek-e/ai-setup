@@ -114,6 +114,16 @@ describe('config', () => {
       expect(config?.provider).toBe('cursor');
     });
 
+    it('respects CALIBER_MODEL for cursor seat', () => {
+      process.env.CALIBER_USE_CURSOR_SEAT = '1';
+      process.env.CALIBER_MODEL = 'auto';
+      const config = resolveFromEnv();
+      expect(config).toEqual({
+        provider: 'cursor',
+        model: 'auto',
+      });
+    });
+
     it('returns claude-cli config when CALIBER_USE_CLAUDE_CLI is set', () => {
       process.env.CALIBER_USE_CLAUDE_CLI = '1';
       const config = resolveFromEnv();
@@ -127,6 +137,16 @@ describe('config', () => {
       process.env.CALIBER_USE_CLAUDE_CLI = 'true';
       const config = resolveFromEnv();
       expect(config?.provider).toBe('claude-cli');
+    });
+
+    it('respects CALIBER_MODEL for claude-cli seat', () => {
+      process.env.CALIBER_USE_CLAUDE_CLI = '1';
+      process.env.CALIBER_MODEL = 'claude-sonnet-4-6';
+      const config = resolveFromEnv();
+      expect(config).toEqual({
+        provider: 'claude-cli',
+        model: 'claude-sonnet-4-6',
+      });
     });
 
     it('prioritizes ANTHROPIC_API_KEY over VERTEX_PROJECT_ID', () => {

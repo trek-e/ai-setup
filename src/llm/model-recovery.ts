@@ -31,7 +31,7 @@ const KNOWN_MODELS: Record<ProviderType, string[]> = {
     'gpt-4o-mini',
     'o3-mini',
   ],
-  cursor: [],
+  cursor: ['auto', 'composer-1.5'],
   'claude-cli': [],
 };
 
@@ -54,6 +54,9 @@ export function isModelNotAvailableError(error: Error): boolean {
   // Vertex-specific: "Publisher model is not found"
   if (msg.includes('publisher model')) return true;
 
+  // Seat-based usage/budget limit (Cursor, Claude CLI)
+  if (msg.includes('usage limit') || msg.includes('out of usage')) return true;
+
   return false;
 }
 
@@ -70,6 +73,9 @@ function filterRelevantModels(models: string[], provider: ProviderType): string[
         m.startsWith('gpt-4') || m.startsWith('gpt-3.5') ||
         m.startsWith('o1') || m.startsWith('o3')
       );
+    case 'cursor':
+    case 'claude-cli':
+      return models;
     default:
       return models;
   }

@@ -51,8 +51,9 @@ describe('runInteractiveProviderSetup', () => {
     );
   });
 
-  it('configures cursor provider without API key', async () => {
+  it('configures cursor provider with default model', async () => {
     mockSelect.mockResolvedValue('cursor');
+    mockQuestion.mockImplementationOnce((_q: string, cb: (answer: string) => void) => cb(''));
 
     const config = await runInteractiveProviderSetup();
 
@@ -61,6 +62,19 @@ describe('runInteractiveProviderSetup', () => {
     expect(config.apiKey).toBeUndefined();
     expect(mockWriteConfigFile).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'cursor', model: 'default' })
+    );
+  });
+
+  it('configures cursor provider with custom model', async () => {
+    mockSelect.mockResolvedValue('cursor');
+    mockQuestion.mockImplementationOnce((_q: string, cb: (answer: string) => void) => cb('auto'));
+
+    const config = await runInteractiveProviderSetup();
+
+    expect(config.provider).toBe('cursor');
+    expect(config.model).toBe('auto');
+    expect(mockWriteConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'cursor', model: 'auto' })
     );
   });
 
@@ -143,6 +157,7 @@ describe('runInteractiveProviderSetup', () => {
 
   it('uses default select message when none provided', async () => {
     mockSelect.mockResolvedValue('cursor');
+    mockQuestion.mockImplementationOnce((_q: string, cb: (answer: string) => void) => cb(''));
 
     await runInteractiveProviderSetup();
 

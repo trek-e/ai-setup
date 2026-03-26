@@ -73,7 +73,7 @@ export class CursorAcpProvider implements LLMProvider {
   private buildArgs(model: string, streaming: boolean): string[] {
     const args = ['--print', '--trust', '--workspace', os.tmpdir()];
 
-    if (model && model !== 'auto' && model !== 'default') {
+    if (model && model !== 'default') {
       args.push('--model', model);
     }
 

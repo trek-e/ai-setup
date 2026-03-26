@@ -47,6 +47,14 @@ describe('isModelNotAvailableError', () => {
     expect(isModelNotAvailableError(new Error('Publisher model is not found or access denied'))).toBe(true);
   });
 
+  it('detects "usage limit" messages', () => {
+    expect(isModelNotAvailableError(new Error("You've reached your normal usage limit."))).toBe(true);
+  });
+
+  it('detects "out of usage" messages', () => {
+    expect(isModelNotAvailableError(new Error("You're out of usage. Switch to Auto or Composer 1.5"))).toBe(true);
+  });
+
   it('returns false for unrelated errors', () => {
     expect(isModelNotAvailableError(new Error('ECONNRESET'))).toBe(false);
   });
@@ -181,12 +189,27 @@ describe('handleModelNotAvailable', () => {
 
   it('returns null when no alternatives are found', async () => {
     const provider = makeProvider();
-    const config = makeConfig({ provider: 'cursor' }); // cursor has empty known models
+    const config = makeConfig({ provider: 'claude-cli' }); // claude-cli has empty known models
 
     const result = await handleModelNotAvailable('default', provider, config);
 
     expect(result).toBeNull();
     expect(mockSelect).not.toHaveBeenCalled();
+  });
+
+  it('offers cursor fallback models on usage limit', async () => {
+    const provider = makeProvider();
+    const config = makeConfig({ provider: 'cursor', model: 'sonnet-4.6' });
+    mockSelect.mockResolvedValue('auto');
+
+    const result = await handleModelNotAvailable('sonnet-4.6', provider, config);
+
+    expect(result).toBe('auto');
+    const choices = mockSelect.mock.calls[0][0].choices;
+    const values = choices.map((c: { value: string }) => c.value);
+    expect(values).toContain('auto');
+    expect(values).toContain('composer-1.5');
+    expect(values).not.toContain('sonnet-4.6');
   });
 
   it('returns null when user cancels selection', async () => {
