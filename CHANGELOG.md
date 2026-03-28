@@ -1,3 +1,9 @@
+## v1.30.6 (2026-03-28)
+
+### Bug Fixes
+
+- remove informal line, fix badge score inconsistency, correct con… (#92)
+
 ## v1.30.5 (2026-03-27)
 
 ### Bug Fixes
