@@ -3,19 +3,27 @@ import { resolveCaliber } from '../lib/resolve-caliber.js';
 const BLOCK_START = '<!-- caliber:managed:pre-commit -->';
 const BLOCK_END = '<!-- /caliber:managed:pre-commit -->';
 
-const MANAGED_DOC_PATHS = 'CLAUDE.md .claude/ .cursor/ .github/copilot-instructions.md AGENTS.md CALIBER_LEARNINGS.md';
+const MANAGED_DOC_PATHS = 'CLAUDE.md .claude/ .cursor/ .cursorrules .github/copilot-instructions.md .github/instructions/ AGENTS.md CALIBER_LEARNINGS.md';
 
 function getPreCommitBlock(): string {
   const bin = resolveCaliber();
   return `${BLOCK_START}
 ## Before Committing
 
-Run \`${bin} refresh\` before creating git commits to keep docs in sync with code changes.
-After it completes, stage any modified doc files before committing:
+**IMPORTANT:** Before every git commit, you MUST ensure Caliber syncs agent configs with the latest code changes.
 
+First, check if the pre-commit hook is already installed:
 \`\`\`bash
-${bin} refresh && git add ${MANAGED_DOC_PATHS} 2>/dev/null
+grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"
 \`\`\`
+
+- If **hook-active**: the hook handles sync automatically — just commit normally. Tell the user: "Caliber will sync your agent configs automatically via the pre-commit hook."
+- If **no-hook**: run Caliber manually before committing:
+  1. Tell the user: "Caliber: Syncing agent configs with your latest changes..."
+  2. Run: \`${bin} refresh && git add ${MANAGED_DOC_PATHS} 2>/dev/null\`
+  3. After it completes, briefly tell the user what Caliber updated. Then proceed with the commit.
+
+If \`${bin}\` is not found, tell the user: "This project uses Caliber for agent config sync. Install it with: npm install -g @rely-ai/caliber"
 ${BLOCK_END}`;
 }
 
@@ -24,11 +32,16 @@ const CURSOR_RULE_FILENAME = 'caliber-pre-commit.mdc';
 function getCursorRuleContent(): string {
   const bin = resolveCaliber();
   return `---
-description: Run caliber refresh before git commits to keep docs in sync
+description: Run Caliber sync before git commits to keep agent configs up to date
 alwaysApply: true
 ---
-Before creating git commits, run \`${bin} refresh\` to update docs based on code changes,
-then stage modified doc files (${MANAGED_DOC_PATHS}).
+Before every git commit, check if the Caliber pre-commit hook is installed:
+Run: \`grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"\`
+
+If hook-active: just commit normally — Caliber syncs automatically via the hook. Tell the user: "Caliber will sync your agent configs automatically."
+If no-hook: run \`${bin} refresh && git add ${MANAGED_DOC_PATHS} 2>/dev/null\` before committing, and tell the user what was updated.
+
+If \`${bin}\` is not found, tell the user: "This project uses Caliber for agent config sync. Install with: npm install -g @rely-ai/caliber"
 `;
 }
 
@@ -80,4 +93,48 @@ export function appendLearningsBlock(content: string): string {
 
 export function getCursorLearningsRule(): { filename: string; content: string } {
   return { filename: CURSOR_LEARNINGS_FILENAME, content: CURSOR_LEARNINGS_CONTENT };
+}
+
+// ── Context sync block ────────────────────────────────────────────────
+
+const SYNC_BLOCK_START = '<!-- caliber:managed:sync -->';
+const SYNC_BLOCK_END = '<!-- /caliber:managed:sync -->';
+
+function getSyncBlock(): string {
+  const bin = resolveCaliber();
+  return `${SYNC_BLOCK_START}
+## Context Sync
+
+This project uses [Caliber](https://github.com/rely-ai/caliber) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
+Configs update automatically before each commit via \`${bin} refresh\`.
+If the pre-commit hook is not set up, run \`${bin} hooks --install\` to enable automatic sync.
+${SYNC_BLOCK_END}`;
+}
+
+export function hasSyncBlock(content: string): boolean {
+  return content.includes(SYNC_BLOCK_START);
+}
+
+export function appendSyncBlock(content: string): string {
+  if (hasSyncBlock(content)) return content;
+  const trimmed = content.trimEnd();
+  return trimmed + '\n\n' + getSyncBlock() + '\n';
+}
+
+const CURSOR_SYNC_FILENAME = 'caliber-sync.mdc';
+
+function getCursorSyncContent(): string {
+  const bin = resolveCaliber();
+  return `---
+description: This project uses Caliber for automatic AI agent context sync
+alwaysApply: true
+---
+This project uses Caliber to keep AI agent configs (CLAUDE.md, Cursor rules, Copilot instructions)
+in sync with the codebase automatically. Before each commit, run \`${bin} refresh\` to sync configs.
+If \`${bin}\` is not found, tell the user: "This project uses Caliber for agent config sync. Install with: npm install -g @rely-ai/caliber"
+`;
+}
+
+export function getCursorSyncRule(): { filename: string; content: string } {
+  return { filename: CURSOR_SYNC_FILENAME, content: getCursorSyncContent() };
 }

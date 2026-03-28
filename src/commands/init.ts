@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import { collectFingerprint, type Fingerprint } from '../fingerprint/index.js';
 import { detectPlatforms } from '../scanner/index.js';
+import { installPreCommitHook } from '../lib/hooks.js';
 import { resolveAllSources } from '../fingerprint/sources.js';
 import { getDetectedWorkspaces } from '../fingerprint/cache.js';
 import { generateSetup, generateSkillsForSetup } from '../ai/generate.js';
@@ -80,14 +81,14 @@ export async function initCommand(options: InitOptions) {
   ╚██████╗██║  ██║███████╗██║██████╔╝███████╗██║  ██║
    ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
   `));
-    console.log(chalk.dim('  Scan your project and generate tailored config files for'));
-    console.log(chalk.dim('  Claude Code, Cursor, Codex, and GitHub Copilot.\n'));
+    console.log(chalk.dim('  Keep your AI agent configs in sync — automatically.'));
+    console.log(chalk.dim('  Works across Claude Code, Cursor, Codex, and GitHub Copilot.\n'));
 
     console.log(title.bold('  How it works:\n'));
     console.log(chalk.dim('  1. Connect    Link your LLM provider and select your agents'));
     console.log(chalk.dim('  2. Engine     Detect stack, generate configs & skills in parallel'));
     console.log(chalk.dim('  3. Review     See all changes — accept, refine, or decline'));
-    console.log(chalk.dim('  4. Finalize   Score check and auto-sync hooks\n'));
+    console.log(chalk.dim('  4. Finalize   Install sync hooks and score your setup\n'));
   } else {
     console.log(brand.bold('\n  CALIBER') + chalk.dim('  — regenerating config\n'));
   }
@@ -584,6 +585,14 @@ export async function initCommand(options: InitOptions) {
 
   if (fingerprint) ensurePermissions(fingerprint);
 
+  // Install pre-commit hook for automatic refresh on every commit
+  const hookResult = installPreCommitHook();
+  if (hookResult.installed) {
+    console.log(`  ${chalk.green('✓')} Pre-commit hook installed — configs sync on every commit`);
+  } else if (hookResult.alreadyInstalled) {
+    console.log(chalk.dim('  Pre-commit hook already installed'));
+  }
+
   const sha = getCurrentHeadSha();
   writeState({
     lastRefreshSha: sha ?? '',
@@ -670,9 +679,9 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Done!
-  console.log(chalk.bold.green('\n  Configuration complete!'));
-  console.log(chalk.dim('  Your AI agents now understand your project\'s architecture, build commands,'));
-  console.log(chalk.dim('  testing patterns, and conventions. All changes are backed up automatically.\n'));
+  console.log(chalk.bold.green('\n  Caliber is set up!'));
+  console.log(chalk.dim('  Your AI agent configs will now stay in sync with your codebase automatically.'));
+  console.log(chalk.dim('  Every commit refreshes configs for all your agents. All changes are backed up.\n'));
 
   const done = chalk.green('✓');
   const skip = chalk.dim('–');

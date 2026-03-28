@@ -33,8 +33,7 @@ describe('pre-commit-block', () => {
       const result = appendPreCommitBlock('# My Project');
 
       expect(result).toContain('npx --yes @rely-ai/caliber refresh');
-      expect(result).not.toMatch(/Run `caliber refresh`/);
-      expect(result).toContain('Run `npx --yes @rely-ai/caliber refresh`');
+      expect(result).toContain('npx --yes @rely-ai/caliber refresh && git add');
     });
 
     it('uses bare caliber in doc block when globally installed', async () => {
@@ -45,7 +44,7 @@ describe('pre-commit-block', () => {
       const { appendPreCommitBlock } = await import('../pre-commit-block.js');
       const result = appendPreCommitBlock('# My Project');
 
-      expect(result).toContain('Run `caliber refresh`');
+      expect(result).toContain('caliber refresh');
       expect(result).toContain('caliber refresh && git add');
     });
 
@@ -77,7 +76,7 @@ describe('pre-commit-block', () => {
       const { getCursorPreCommitRule } = await import('../pre-commit-block.js');
       const rule = getCursorPreCommitRule();
 
-      expect(rule.content).toContain('`caliber refresh`');
+      expect(rule.content).toContain('caliber refresh');
       expect(rule.content).not.toContain('npx');
     });
   });

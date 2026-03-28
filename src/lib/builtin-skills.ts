@@ -141,7 +141,118 @@ export const SAVE_LEARNING_SKILL = {
   get content() { return getSaveLearningContent(); },
 };
 
-export const BUILTIN_SKILLS = [FIND_SKILLS_SKILL, SAVE_LEARNING_SKILL];
+function getSetupCaliberContent(): string {
+  const bin = resolveCaliber();
+  return `# Setup Caliber
+
+Set up Caliber for automatic AI agent context sync on this project.
+Caliber keeps your CLAUDE.md, Cursor rules, Copilot instructions, and Codex configs
+in sync with your codebase — automatically on every commit.
+
+## Instructions
+
+1. Check if Caliber is already set up locally:
+   \`\`\`bash
+   grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"
+   \`\`\`
+
+2. If **hook-active**, tell the user: "Caliber is already set up on this repo.
+   Your agent configs update automatically on every commit." Then stop.
+
+3. If **no-hook**, ask the user: "Are you setting up Caliber for yourself (solo)
+   or for your team?"
+
+### Solo Setup
+
+a. Tell the user: "I'll set up Caliber to sync your agent configs automatically
+   on every commit."
+b. Install the pre-commit hook:
+   \`\`\`bash
+   ${bin} hooks --install
+   \`\`\`
+c. Run a refresh to make sure configs are current:
+   \`\`\`bash
+   ${bin} refresh
+   \`\`\`
+d. Tell the user what happened and that configs will auto-sync on every commit.
+
+### Team Setup
+
+a. Tell the user: "I'll set up Caliber for your team — local hooks for you,
+   plus a GitHub Action for automatic sync across the team."
+b. Install the local pre-commit hook:
+   \`\`\`bash
+   ${bin} hooks --install
+   \`\`\`
+c. Run a refresh:
+   \`\`\`bash
+   ${bin} refresh
+   \`\`\`
+d. Create the GitHub Action workflow for nightly sync. Write this file to
+   \`.github/workflows/caliber-sync.yml\`:
+   \`\`\`yaml
+   name: Caliber Sync
+   on:
+     schedule:
+       - cron: '0 3 * * 1-5'
+     pull_request:
+       types: [opened, synchronize]
+     workflow_dispatch:
+   jobs:
+     sync:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: caliber-ai-org/ai-setup@v1
+           with:
+             mode: sync
+             auto-refresh: true
+             comment: true
+             github-token: \${{ secrets.GITHUB_TOKEN }}
+           env:
+             ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+   \`\`\`
+e. Tell the user: "Created the GitHub Action workflow. Add your ANTHROPIC_API_KEY
+   to your repo secrets (Settings → Secrets → Actions), then commit and push this
+   workflow file. From now on, every PR gets a Caliber sync check and configs
+   refresh nightly."
+f. Offer to commit the workflow file and the updated configs.
+
+### If \`${bin}\` is not found
+
+Install it first:
+\`\`\`bash
+npm install -g @rely-ai/caliber
+\`\`\`
+Or use npx (no install needed):
+\`\`\`bash
+npx @rely-ai/caliber hooks --install
+\`\`\`
+
+## When to trigger
+
+- When a developer first opens this project and Caliber hooks are not installed
+- When the user asks about keeping agent configs up to date
+- When the user asks "how do I set up Caliber" or "what is Caliber"
+
+## When NOT to trigger
+
+- Hooks are already installed and working
+- The user is in the middle of time-sensitive work
+`;
+}
+
+export const SETUP_CALIBER_SKILL = {
+  name: 'setup-caliber',
+  description:
+    "Sets up Caliber for automatic AI agent context sync. " +
+    "Installs pre-commit hooks so CLAUDE.md, Cursor rules, and Copilot instructions " +
+    "update automatically on every commit. Use when Caliber hooks are not yet installed " +
+    "or when the user asks about keeping agent configs in sync.",
+  get content() { return getSetupCaliberContent(); },
+};
+
+export const BUILTIN_SKILLS = [FIND_SKILLS_SKILL, SAVE_LEARNING_SKILL, SETUP_CALIBER_SKILL];
 
 // Platform root dirs that indicate the platform is configured
 const PLATFORM_CONFIGS: Array<{ platformDir: string; skillsDir: string }> = [

@@ -28,6 +28,11 @@ interface ProjectContext {
   fileTree?: string[];
 }
 
+interface FileChangeSummary {
+  file: string;
+  description: string;
+}
+
 interface RefreshResponse {
   updatedDocs: {
     claudeMd?: string | null;
@@ -35,8 +40,11 @@ interface RefreshResponse {
     cursorrules?: string | null;
     cursorRules?: Array<{ filename: string; content: string }> | null;
     claudeSkills?: Array<{ filename: string; content: string }> | null;
+    copilotInstructions?: string | null;
+    copilotInstructionFiles?: Array<{ filename: string; content: string }> | null;
   };
   changesSummary: string;
+  fileChanges?: FileChangeSummary[];
   docsUpdated: string[];
 }
 

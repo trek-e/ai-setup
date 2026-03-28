@@ -36,11 +36,12 @@ describe('writeCursorConfig — skills', () => {
     );
   });
 
-  it('writes pre-commit and learnings rules even when no skills provided', () => {
+  it('writes pre-commit, learnings, and sync rules even when no skills provided', () => {
     const written = writeCursorConfig({});
-    expect(written).toHaveLength(2);
+    expect(written).toHaveLength(3);
     expect(written).toContain(path.join('.cursor', 'rules', 'caliber-pre-commit.mdc'));
     expect(written).toContain(path.join('.cursor', 'rules', 'caliber-learnings.mdc'));
+    expect(written).toContain(path.join('.cursor', 'rules', 'caliber-sync.mdc'));
   });
 
   it('writes both skills and legacy cursorrules when both are present', () => {
@@ -57,6 +58,7 @@ describe('writeCursorConfig — skills', () => {
     expect(written).toContain(path.join('.cursor', 'skills', 'my-skill', 'SKILL.md'));
     expect(written).toContain(path.join('.cursor', 'rules', 'caliber-pre-commit.mdc'));
     expect(written).toContain(path.join('.cursor', 'rules', 'caliber-learnings.mdc'));
-    expect(written).toHaveLength(4);
+    expect(written).toContain(path.join('.cursor', 'rules', 'caliber-sync.mdc'));
+    expect(written).toHaveLength(5);
   });
 });
