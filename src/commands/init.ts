@@ -232,7 +232,49 @@ export async function initCommand(options: InitOptions) {
   }
 
   if (skipGeneration) {
-    // Sync infrastructure is already installed — just show summary and exit
+    // Write managed blocks into config files so agents know about Caliber
+    const { appendPreCommitBlock, appendLearningsBlock, appendSyncBlock,
+            getCursorPreCommitRule, getCursorLearningsRule, getCursorSyncRule } = await import('../writers/pre-commit-block.js');
+
+    // CLAUDE.md — create or append managed blocks
+    const claudeMdPath = 'CLAUDE.md';
+    let claudeContent = '';
+    try { claudeContent = fs.readFileSync(claudeMdPath, 'utf-8'); } catch { /* doesn't exist */ }
+    if (!claudeContent) {
+      claudeContent = `# ${path.basename(process.cwd())}\n`;
+    }
+    const updatedClaude = appendSyncBlock(appendLearningsBlock(appendPreCommitBlock(claudeContent)));
+    if (updatedClaude !== claudeContent || !fs.existsSync(claudeMdPath)) {
+      fs.writeFileSync(claudeMdPath, updatedClaude);
+      console.log(`  ${chalk.green('✓')} CLAUDE.md — added Caliber sync instructions`);
+    }
+
+    // Cursor rules — write sync and pre-commit rules
+    if (targetAgent.includes('cursor')) {
+      const rulesDir = path.join('.cursor', 'rules');
+      if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
+      for (const rule of [getCursorPreCommitRule(), getCursorLearningsRule(), getCursorSyncRule()]) {
+        fs.writeFileSync(path.join(rulesDir, rule.filename), rule.content);
+      }
+      console.log(`  ${chalk.green('✓')} Cursor rules — added Caliber sync rules`);
+    }
+
+    // Copilot — create or append managed blocks
+    if (targetAgent.includes('github-copilot')) {
+      const copilotPath = path.join('.github', 'copilot-instructions.md');
+      let copilotContent = '';
+      try { copilotContent = fs.readFileSync(copilotPath, 'utf-8'); } catch { /* doesn't exist */ }
+      if (!copilotContent) {
+        fs.mkdirSync('.github', { recursive: true });
+        copilotContent = `# ${path.basename(process.cwd())}\n`;
+      }
+      const updatedCopilot = appendSyncBlock(appendLearningsBlock(appendPreCommitBlock(copilotContent)));
+      if (updatedCopilot !== copilotContent) {
+        fs.writeFileSync(copilotPath, updatedCopilot);
+        console.log(`  ${chalk.green('✓')} Copilot instructions — added Caliber sync instructions`);
+      }
+    }
+
     const sha = getCurrentHeadSha();
     writeState({
       lastRefreshSha: sha ?? '',
