@@ -105,7 +105,7 @@ function getSyncBlock(): string {
   return `${SYNC_BLOCK_START}
 ## Context Sync
 
-This project uses [Caliber](https://github.com/rely-ai/caliber) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
+This project uses [Caliber](https://github.com/caliber-ai-org/ai-setup) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
 Configs update automatically before each commit via \`${bin} refresh\`.
 If the pre-commit hook is not set up, run \`${bin} hooks --install\` to enable automatic sync.
 ${SYNC_BLOCK_END}`;
