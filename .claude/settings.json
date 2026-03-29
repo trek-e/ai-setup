@@ -57,6 +57,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/caliber-session-start.sh",
+            "description": "Caliber: check sync setup on session start"
+          }
+        ]
+      }
     ]
   },
   "permissions": {
