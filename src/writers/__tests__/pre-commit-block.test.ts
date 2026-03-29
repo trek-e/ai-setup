@@ -80,7 +80,7 @@ describe('pre-commit-block', () => {
       expect(result).not.toContain('/setup-caliber to get set up');
     });
 
-    it('uses inline install fallback for copilot platform', async () => {
+    it('uses npx-based fallback for copilot platform', async () => {
       process.argv[1] = '/usr/local/bin/caliber';
       delete process.env.npm_execpath;
       mockedExecSync.mockReturnValue('/usr/local/bin/caliber\n');
@@ -88,9 +88,8 @@ describe('pre-commit-block', () => {
       const { appendPreCommitBlock } = await import('../pre-commit-block.js');
       const result = appendPreCommitBlock('# My Project', 'copilot');
 
-      expect(result).toContain('npm install -g @rely-ai/caliber');
-      expect(result).toContain('caliber hooks --install');
-      expect(result).not.toContain('/setup-caliber to get set up');
+      expect(result).toContain('npx @rely-ai/caliber');
+      expect(result).toContain('/setup-caliber');
     });
   });
 
@@ -118,7 +117,7 @@ describe('pre-commit-block', () => {
       expect(result).toContain('.agents/skills/setup-caliber/SKILL.md');
     });
 
-    it('uses inline install instructions for copilot platform', async () => {
+    it('uses npx-based instructions for copilot platform', async () => {
       process.argv[1] = '/usr/local/bin/caliber';
       delete process.env.npm_execpath;
       mockedExecSync.mockReturnValue('/usr/local/bin/caliber\n');
@@ -126,9 +125,9 @@ describe('pre-commit-block', () => {
       const { appendSyncBlock } = await import('../pre-commit-block.js');
       const result = appendSyncBlock('# My Project', 'copilot');
 
-      expect(result).toContain('npm install -g @rely-ai/caliber');
-      expect(result).toContain('caliber hooks --install');
-      expect(result).toContain('caliber refresh');
+      expect(result).toContain('npx @rely-ai/caliber hooks --install');
+      expect(result).toContain('npx @rely-ai/caliber refresh');
+      expect(result).toContain('/setup-caliber');
     });
   });
 

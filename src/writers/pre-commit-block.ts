@@ -14,7 +14,11 @@ function getCaliberNotFoundFallback(platform: ConfigPlatform, bin: string): stri
     case 'codex':
       return `If \`${bin}\` is not found, read \`.agents/skills/setup-caliber/SKILL.md\` and follow its instructions to install Caliber.`;
     case 'copilot':
-      return `If \`${bin}\` is not found, install it by running \`npm install -g @rely-ai/caliber\`, then run \`caliber hooks --install\` and \`caliber refresh\`.`;
+      return `If \`${bin}\` is not found, tell the developer to set up Caliber by running \`/setup-caliber\` in Claude Code or Cursor. Alternatively, they can run these commands in their terminal:
+\`\`\`
+npx @rely-ai/caliber hooks --install
+npx @rely-ai/caliber refresh
+\`\`\``;
   }
 }
 
@@ -120,11 +124,10 @@ function getSyncSetupInstruction(platform: ConfigPlatform, bin: string): string 
     case 'codex':
       return `If the pre-commit hook is not set up, read \`.agents/skills/setup-caliber/SKILL.md\` and follow the setup instructions.`;
     case 'copilot':
-      return `If the pre-commit hook is not set up, install it by running:
+      return `If the pre-commit hook is not set up, the developer should run \`/setup-caliber\` in Claude Code or Cursor for automated setup. Alternatively, run in terminal:
 \`\`\`bash
-npm install -g @rely-ai/caliber
-caliber hooks --install
-caliber refresh
+npx @rely-ai/caliber hooks --install
+npx @rely-ai/caliber refresh
 git add ${MANAGED_DOC_PATHS} 2>/dev/null
 \`\`\``;
   }
@@ -198,4 +201,21 @@ If the user agrees, read \`.cursor/skills/setup-caliber/SKILL.md\` and follow it
 
 export function getCursorSetupRule(): { filename: string; content: string } {
   return { filename: CURSOR_SETUP_FILENAME, content: getCursorSetupContent() };
+}
+
+// ── Managed block stripping (for uninstall) ─────────────────────────
+
+const MANAGED_BLOCK_PAIRS = [
+  [BLOCK_START, BLOCK_END],
+  [LEARNINGS_BLOCK_START, LEARNINGS_BLOCK_END],
+  [SYNC_BLOCK_START, SYNC_BLOCK_END],
+];
+
+export function stripManagedBlocks(content: string): string {
+  let result = content;
+  for (const [start, end] of MANAGED_BLOCK_PAIRS) {
+    const regex = new RegExp(`\\n?${start.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${end.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`, 'g');
+    result = result.replace(regex, '\n');
+  }
+  return result.replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }

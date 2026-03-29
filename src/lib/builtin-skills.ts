@@ -159,18 +159,19 @@ then only act if something is missing.
 command -v caliber >/dev/null 2>&1 && caliber --version || echo "NOT_INSTALLED"
 \`\`\`
 
-- If a version prints → Caliber is installed. Move to Step 2.
-- If NOT_INSTALLED → Tell the user: "Caliber isn't installed yet. I'll install it now."
-  Then run:
+- If a version prints → Caliber is installed globally. Set \`CALIBER="caliber"\` and move to Step 2.
+- If NOT_INSTALLED → Install it globally (faster for daily use since the pre-commit hook runs on every commit):
   \`\`\`bash
   npm install -g @rely-ai/caliber
   \`\`\`
-  If npm fails (permissions, no Node, etc.), try:
+  Set \`CALIBER="caliber"\`.
+
+  If npm fails (permissions, no sudo, etc.), fall back to npx:
   \`\`\`bash
-  npx @rely-ai/caliber --version
+  npx @rely-ai/caliber --version 2>/dev/null || echo "NO_NODE"
   \`\`\`
-  If npx works, use \`npx @rely-ai/caliber\` as the command prefix for all subsequent steps.
-  If both fail, tell the user: "Caliber requires Node.js >= 20. Install Node first, then run /setup-caliber again."
+  - If npx works → Set \`CALIBER="npx @rely-ai/caliber"\`. This works but adds ~500ms per invocation.
+  - If NO_NODE → Tell the user: "Caliber requires Node.js >= 20. Install Node first, then run /setup-caliber again." Stop here.
 
 ### Step 2: Check if pre-commit hook is installed
 
@@ -181,7 +182,7 @@ grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "HOOK_ACTIVE" || ech
 - If HOOK_ACTIVE → Tell the user: "Pre-commit hook is active — configs sync on every commit." Move to Step 3.
 - If NO_HOOK → Tell the user: "I'll install the pre-commit hook so your agent configs sync automatically on every commit."
   \`\`\`bash
-  caliber hooks --install
+  $CALIBER hooks --install
   \`\`\`
 
 ### Step 3: Detect agents and check if configs exist
@@ -211,22 +212,22 @@ echo "COPILOT=$([ -f .github/copilot-instructions.md ] && echo exists || echo mi
 - If configs are missing → Tell the user: "No agent configs found. I'll generate them now."
   Use the detected or user-selected agent list:
   \`\`\`bash
-  caliber init --auto-approve --agent <comma-separated-agents>
+  $CALIBER init --auto-approve --agent <comma-separated-agents>
   \`\`\`
-  For example: \`caliber init --auto-approve --agent claude,cursor\`
+  For example: \`$CALIBER init --auto-approve --agent claude,cursor\`
   This generates CLAUDE.md, Cursor rules, AGENTS.md, skills, and sync infrastructure for the specified agents.
 
 ### Step 4: Check if configs are fresh
 
 \`\`\`bash
-caliber score --json --quiet 2>/dev/null | head -1
+$CALIBER score --json --quiet 2>/dev/null | head -1
 \`\`\`
 
 - If score is 80+ → Tell the user: "Your configs are in good shape (score: X/100)."
 - If score is below 80 → Tell the user: "Your configs could be improved (score: X/100). Want me to run a refresh?"
   If yes:
   \`\`\`bash
-  caliber refresh
+  $CALIBER refresh
   \`\`\`
 
 ### Step 5: Ask about team setup
@@ -237,20 +238,20 @@ Ask the user: "Are you setting up for yourself only, or for your team too?"
 
   Check if session learning is enabled:
   \`\`\`bash
-  caliber learn status 2>/dev/null | head -3
+  $CALIBER learn status 2>/dev/null | head -3
   \`\`\`
   - If learning is already enabled → note it in the summary.
   - If not enabled → ask the user: "Caliber can learn from your coding sessions — when you correct a mistake or fix a pattern, it remembers for next time. Enable session learning?"
     If yes:
     \`\`\`bash
-    caliber learn install
+    $CALIBER learn install
     \`\`\`
 
   Then tell the user:
   "You're all set! Here's what happens next:
   - Every time you commit, Caliber syncs your agent configs automatically
   - Your CLAUDE.md, Cursor rules, and AGENTS.md stay current with your code
-  - Run \`caliber skills\` anytime to discover community skills for your stack"
+  - Run \`$CALIBER skills\` anytime to discover community skills for your stack"
 
   Then show the summary (see below) and stop.
 
@@ -285,7 +286,7 @@ Ask the user: "Are you setting up for yourself only, or for your team too?"
     \`\`\`
     Now determine which LLM provider the team uses. Check the local Caliber config:
     \`\`\`bash
-    caliber config --show 2>/dev/null || echo "NO_CONFIG"
+    $CALIBER config --show 2>/dev/null || echo "NO_CONFIG"
     \`\`\`
 
     Based on the provider, the GitHub Action needs the corresponding secret:
@@ -361,8 +362,7 @@ export const SETUP_CALIBER_SKILL = {
 
 export const BUILTIN_SKILLS = [FIND_SKILLS_SKILL, SAVE_LEARNING_SKILL, SETUP_CALIBER_SKILL];
 
-// Platform root dirs that indicate the platform is configured
-const PLATFORM_CONFIGS: Array<{ platformDir: string; skillsDir: string }> = [
+export const PLATFORM_CONFIGS: Array<{ platformDir: string; skillsDir: string }> = [
   { platformDir: '.claude', skillsDir: path.join('.claude', 'skills') },
   { platformDir: '.cursor', skillsDir: path.join('.cursor', 'skills') },
   { platformDir: '.agents', skillsDir: path.join('.agents', 'skills') },
