@@ -1,3 +1,9 @@
+## v1.35.0 (2026-03-30)
+
+### Features
+
+- add OpenCode as target agent (#103)
+
 ## v1.34.0 (2026-03-29)
 
 ### Features
