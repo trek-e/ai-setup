@@ -56,12 +56,16 @@ describe('refreshDocs', () => {
       docsUpdated: [],
     });
 
-    await refreshDocs({
-      ...baseDiff,
-      committed: 'committed diff',
-      staged: 'staged diff',
-      unstaged: 'unstaged diff',
-    }, {}, baseContext);
+    await refreshDocs(
+      {
+        ...baseDiff,
+        committed: 'committed diff',
+        staged: 'staged diff',
+        unstaged: 'unstaged diff',
+      },
+      {},
+      baseContext,
+    );
 
     const prompt = mockedLlmCall.mock.calls[0][0].prompt;
     expect(prompt).toContain('--- Committed Changes ---');
@@ -80,21 +84,25 @@ describe('refreshDocs', () => {
       docsUpdated: [],
     });
 
-    await refreshDocs(baseDiff, {
-      claudeMd: '# My CLAUDE.md',
-      readmeMd: '# README',
-      cursorrules: 'cursor rules content',
-      claudeSkills: [{ filename: 'test.md', content: 'skill content' }],
-      cursorRules: [{ filename: 'rule.mdc', content: 'rule content' }],
-    }, baseContext);
+    await refreshDocs(
+      baseDiff,
+      {
+        claudeMd: '# My CLAUDE.md',
+        readmeMd: '# README',
+        cursorrules: 'cursor rules content',
+        cursorRules: [{ filename: 'rule.mdc', content: 'rule content' }],
+        copilotInstructions: '# Copilot instructions',
+      },
+      baseContext,
+    );
 
     const prompt = mockedLlmCall.mock.calls[0][0].prompt;
     expect(prompt).toContain('[CLAUDE.md]');
     expect(prompt).toContain('# My CLAUDE.md');
     expect(prompt).toContain('[README.md]');
     expect(prompt).toContain('[.cursorrules]');
-    expect(prompt).toContain('[.claude/skills/test.md]');
     expect(prompt).toContain('[.cursor/rules/rule.mdc]');
+    expect(prompt).toContain('[.github/copilot-instructions.md]');
   });
 
   it('omits empty diff sections', async () => {
@@ -105,12 +113,16 @@ describe('refreshDocs', () => {
       docsUpdated: [],
     });
 
-    await refreshDocs({
-      ...baseDiff,
-      committed: '',
-      staged: '',
-      unstaged: '',
-    }, {}, baseContext);
+    await refreshDocs(
+      {
+        ...baseDiff,
+        committed: '',
+        staged: '',
+        unstaged: '',
+      },
+      {},
+      baseContext,
+    );
 
     const prompt = mockedLlmCall.mock.calls[0][0].prompt;
     expect(prompt).not.toContain('--- Committed Changes ---');
@@ -118,7 +130,7 @@ describe('refreshDocs', () => {
     expect(prompt).not.toContain('--- Unstaged Changes ---');
   });
 
-  it('uses maxTokens of 16384', async () => {
+  it('uses fixed maxTokens of 16384', async () => {
     mockedLlmCall.mockResolvedValue('{}');
     mockedParseJson.mockReturnValue({
       updatedDocs: {},
@@ -127,7 +139,6 @@ describe('refreshDocs', () => {
     });
 
     await refreshDocs(baseDiff, {}, baseContext);
-
     expect(mockedLlmCall.mock.calls[0][0].maxTokens).toBe(16384);
   });
 

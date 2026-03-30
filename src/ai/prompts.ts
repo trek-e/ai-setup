@@ -332,6 +332,11 @@ Quality constraints (the output is scored deterministically):
 - ONLY reference file paths that exist in the provided file tree — do NOT invent paths
 - Preserve the existing structure (headings, bullet style, formatting)
 
+Cross-agent sync:
+- When a code change affects documentation, update ALL provided platform configs together.
+- A renamed command, moved file, or changed convention must be reflected in every config (CLAUDE.md, AGENTS.md, copilot instructions, skills across all platforms).
+- Cross-agent consistency is critical — all agents working on this repo must have the same, accurate context.
+
 Managed content:
 - Keep managed blocks (<!-- caliber:managed --> ... <!-- /caliber:managed -->) intact
 - Do NOT modify CALIBER_LEARNINGS.md — it is managed separately
@@ -345,7 +350,6 @@ Return a JSON object with this exact shape:
     "readmeMd": "<updated content or null>",
     "cursorrules": "<updated content or null>",
     "cursorRules": [{"filename": "name.mdc", "content": "..."}] or null,
-    "claudeSkills": [{"filename": "name.md", "content": "..."}] or null,
     "copilotInstructions": "<updated content or null>",
     "copilotInstructionFiles": [{"filename": "name.instructions.md", "content": "..."}] or null
   },
