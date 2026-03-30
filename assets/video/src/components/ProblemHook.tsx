@@ -1,158 +1,91 @@
-import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
+import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
-// LP exact copy — two-column comparison
-const withoutSetup = [
-  "No project context for agents",
-  "No learning from past AI sessions",
-  "Missing MCPs that unlock key features",
-  "Stale configs nobody updates",
-];
-
-const withSetup = [
-  "Full project context generated",
-  "Session learnings captured automatically",
-  "Right MCPs recommended and installed",
-  "Configs stay fresh as code changes",
-];
+// Scene 1: "The Hook" (0-4s, 120 frames)
+// One idea: Your AI tools are only as good as their setup.
+// Animation: opacity fades only. Zero springs. Zero transforms.
 
 export const ProblemHook: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
-  const titleSpring = spring({ frame, fps, config: { damping: 20, stiffness: 80 } });
-  const titleY = interpolate(titleSpring, [0, 1], [20, 0]);
-  const titleOpacity = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: "clamp" });
+  // "Bad setup = bad agent." fades in
+  const headlineOpacity = interpolate(frame, [0, 15], [0, 1], {
+    extrapolateRight: "clamp",
+  });
 
-  const columnsOpacity = interpolate(frame, [18, 30], [0, 1], { extrapolateRight: "clamp" });
+  // Subtitle fades in after headline
+  const subtitleOpacity = interpolate(frame, [20, 35], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  // At frame 50, crossfade: first headline fades out, second fades in
+  const headline1Opacity = interpolate(frame, [50, 65], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const headline2Opacity = interpolate(frame, [50, 65], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
   return (
-    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 64 }}>
-        {/* Title — LP exact */}
-        <div
-          style={{
-            fontSize: 96,
-            fontWeight: 700,
-            fontFamily: theme.fontSans,
-            color: theme.text,
-            letterSpacing: "-0.04em",
-            opacity: titleOpacity,
-            transform: `translateY(${titleY}px)`,
-          }}
-        >
-          Bad setup = bad agent.
+    <AbsoluteFill
+      style={{
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 28,
+        }}
+      >
+        {/* Headline area — fixed position, crossfade between two texts */}
+        <div style={{ position: "relative", height: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              position: "absolute",
+              fontSize: 80,
+              fontWeight: 700,
+              fontFamily: theme.fontSans,
+              color: theme.text,
+              letterSpacing: "-0.03em",
+              opacity: headlineOpacity * headline1Opacity,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Bad setup = bad agent.
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              fontSize: 80,
+              fontWeight: 700,
+              fontFamily: theme.fontSans,
+              letterSpacing: "-0.03em",
+              opacity: headline2Opacity,
+              whiteSpace: "nowrap",
+              color: theme.brand3,
+            }}
+          >
+            Caliber fixes that.
+          </div>
         </div>
 
-        {/* Two-column comparison — matches LP layout */}
+        {/* Subtitle — fades out with first headline */}
         <div
           style={{
-            display: "flex",
-            gap: 32,
-            opacity: columnsOpacity,
+            fontSize: 32,
+            fontFamily: theme.fontSans,
+            color: theme.textMuted,
+            fontWeight: 400,
+            opacity: subtitleOpacity * headline1Opacity,
           }}
         >
-          {/* Without Setup */}
-          <div
-            style={{
-              width: 640,
-              backgroundColor: theme.surface,
-              border: `1px solid ${theme.surfaceBorder}`,
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                padding: "20px 32px",
-                borderBottom: `1px solid ${theme.surfaceBorder}`,
-                backgroundColor: theme.surfaceHeader,
-              }}
-            >
-              <span style={{ fontSize: 24, fontWeight: 600, fontFamily: theme.fontSans, color: theme.red }}>
-                Without Setup
-              </span>
-            </div>
-            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-              {withoutSetup.map((item, i) => {
-                const delay = 24 + i * 6;
-                const itemOpacity = interpolate(frame, [delay, delay + 6], [0, 1], {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                });
-                return (
-                  <div
-                    key={item}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 16,
-                      opacity: itemOpacity,
-                    }}
-                  >
-                    <svg width={20} height={20} viewBox="0 0 20 20" fill="none">
-                      <circle cx={10} cy={10} r={9} stroke={theme.red} strokeWidth={1.5} opacity={0.4} />
-                      <path d="M7 7L13 13M13 7L7 13" stroke={theme.red} strokeWidth={1.5} strokeLinecap="round" />
-                    </svg>
-                    <span style={{ fontSize: 26, fontFamily: theme.fontSans, color: theme.textSecondary }}>
-                      {item}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* With Setup */}
-          <div
-            style={{
-              width: 640,
-              backgroundColor: theme.surface,
-              border: `1px solid ${theme.surfaceBorder}`,
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                padding: "20px 32px",
-                borderBottom: `1px solid ${theme.surfaceBorder}`,
-                backgroundColor: theme.surfaceHeader,
-              }}
-            >
-              <span style={{ fontSize: 24, fontWeight: 600, fontFamily: theme.fontSans, color: theme.green }}>
-                With Setup
-              </span>
-            </div>
-            <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-              {withSetup.map((item, i) => {
-                const delay = 48 + i * 6;
-                const itemOpacity = interpolate(frame, [delay, delay + 6], [0, 1], {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                });
-                return (
-                  <div
-                    key={item}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 16,
-                      opacity: itemOpacity,
-                    }}
-                  >
-                    <svg width={20} height={20} viewBox="0 0 20 20" fill="none">
-                      <circle cx={10} cy={10} r={9} stroke={theme.green} strokeWidth={1.5} opacity={0.4} />
-                      <path d="M6 10L9 13L14 7" stroke={theme.green} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <span style={{ fontSize: 26, fontFamily: theme.fontSans, color: theme.textSecondary }}>
-                      {item}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          Most teams ship with zero AI context.
         </div>
       </div>
     </AbsoluteFill>
