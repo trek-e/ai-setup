@@ -1,6 +1,6 @@
 # Caliber
 
-**Hand-written `CLAUDE.md` files go stale the moment you refactor.** Your AI agent hallucinates paths that no longer exist, misses new dependencies, and gives advice based on yesterday's architecture. Caliber generates and maintains your AI context files (`CLAUDE.md`, `.cursor/rules/`, `AGENTS.md`) so they stay accurate as your code evolves.
+**Hand-written `CLAUDE.md` files go stale the moment you refactor.** Your AI agent hallucinates paths that no longer exist, misses new dependencies, and gives advice based on yesterday's architecture. Caliber generates and maintains your AI context files (`CLAUDE.md`, `.cursor/rules/`, `AGENTS.md`) so they stay accurate as your code evolves — and keeps every agent on your team in sync, whether they use Claude Code, Cursor, Codex, or OpenCode.
 
 <p align="center">
   <img src="assets/demo-header.gif" alt="Caliber product demo" width="900">
@@ -54,9 +54,11 @@ Then, in your next Claude Code or Cursor chat session, type:
 
 > **/setup-caliber**
 
-Your agent detects your stack, generates tailored configs, sets up pre-commit hooks, and enables continuous sync — all from inside your normal workflow. If you prefer a CLI-driven setup without an AI agent, use `caliber init` instead.
+Your agent detects your stack, generates tailored configs for every platform your team uses, sets up pre-commit hooks, and enables continuous sync — all from inside your normal workflow.
 
-> **Your code stays on your machine.** Bootstrap is 100% local — no LLM calls, no code sent anywhere. Generation uses your own AI subscription (Claude Code, Cursor) or your own API key (Anthropic, OpenAI, Vertex AI). Caliber never sees your code.
+**Don't use Claude Code or Cursor?** Run `caliber init` instead — it's the same setup as a CLI wizard. Works with any LLM provider: bring your own Anthropic, OpenAI, or Vertex AI key.
+
+> **Your code stays on your machine.** Bootstrap is 100% local — no LLM calls, no code sent anywhere. Generation uses your own AI subscription or API key. Caliber never sees your code.
 
 ## Audits first, writes second
 
