@@ -4,46 +4,87 @@ import { Logo } from "./Logo";
 import { ClaudeIcon, CursorIcon, CodexIcon, CopilotIcon } from "./ToolIcons";
 
 // Scene 4: "Team + CTA" (14-18s, 120 frames)
-// Phase A (0-60): One dev sets up, everyone benefits
-// Phase B (60-120): CTA with logo, command, platforms
+// Phase A (0-60): The story — first dev creates configs, team gets them via git
+// Phase B (60-120): CTA
 // Animation: opacity fades only. Springs only for Logo.
 
-const Avatar: React.FC<{ size: number; color: string }> = ({ size, color }) => (
-  <div
-    style={{
-      width: size,
-      height: size,
-      borderRadius: size / 2,
-      backgroundColor: theme.cardBg,
-      border: `2px solid ${color}50`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <svg width={size * 0.45} height={size * 0.45} viewBox="0 0 24 24" fill="none">
-      <circle cx={12} cy={8} r={4} fill={`${color}40`} stroke={color} strokeWidth={1.5} />
-      <path
-        d="M4 20C4 17.24 7.58 15 12 15C16.42 15 20 17.24 20 20"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        fill={`${color}20`}
-      />
-    </svg>
+const Avatar: React.FC<{ size: number; color: string; label?: string }> = ({
+  size,
+  color,
+  label,
+}) => (
+  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: theme.cardBg,
+        border: `2px solid ${color}50`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <svg width={size * 0.45} height={size * 0.45} viewBox="0 0 24 24" fill="none">
+        <circle cx={12} cy={8} r={4} fill={`${color}40`} stroke={color} strokeWidth={1.5} />
+        <path
+          d="M4 20C4 17.24 7.58 15 12 15C16.42 15 20 17.24 20 20"
+          stroke={color}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          fill={`${color}20`}
+        />
+      </svg>
+    </div>
+    {label && (
+      <span style={{ fontSize: 18, fontFamily: theme.fontMono, color, fontWeight: 500 }}>
+        {label}
+      </span>
+    )}
   </div>
 );
+
+// Config file badges that appear next to each team member
+const configFiles = [
+  { name: "CLAUDE.md", color: theme.brand2 },
+  { name: ".cursor/rules/", color: theme.accent },
+  { name: "AGENTS.md", color: theme.green },
+];
 
 export const TeamCTA: React.FC = () => {
   const frame = useCurrentFrame();
 
   const isCTAPhase = frame >= 60;
 
-  // Phase A
+  // Phase A timing
   const teamOpacity = interpolate(frame, [0, 15, 54, 66], [0, 1, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+
+  // Step 1: First dev + "caliber init" (frames 0-15)
+  const step1Opacity = interpolate(frame, [0, 12], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  // Step 2: Config files appear in repo column (frames 14-24)
+  const filesOpacity = interpolate(frame, [14, 24], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  // Step 3: Arrow from repo to team (frames 22-30)
+  const arrowOpacity = interpolate(frame, [22, 30], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  // Step 4: Team members appear with their own config badges (frames 28-42)
+  const team1Opacity = interpolate(frame, [28, 36], [0, 1], { extrapolateRight: "clamp" });
+  const team2Opacity = interpolate(frame, [32, 40], [0, 1], { extrapolateRight: "clamp" });
+  const team3Opacity = interpolate(frame, [36, 44], [0, 1], { extrapolateRight: "clamp" });
+
+  // Step 5: "Ready" checkmarks next to each team member (frames 40-50)
+  const checksOpacity = interpolate(frame, [40, 50], [0, 1], { extrapolateRight: "clamp" });
 
   // Phase B
   const ctaOpacity = interpolate(frame, [60, 75], [0, 1], {
@@ -59,94 +100,299 @@ export const TeamCTA: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
+  const teamMembers = [
+    { color: theme.accent, name: "Dev 2", opacity: team1Opacity },
+    { color: theme.green, name: "Dev 3", opacity: team2Opacity },
+    { color: theme.purple, name: "Dev 4", opacity: team3Opacity },
+  ];
+
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-      {/* Phase A: Team sync */}
+      {/* Phase A: Team sync story */}
       <div
         style={{
           position: "absolute",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 48,
+          gap: 40,
           opacity: teamOpacity,
         }}
       >
-        {/* LP section label */}
-        <div
-          style={{
-            fontSize: 22,
-            fontFamily: theme.fontMono,
-            color: theme.brand2,
-            fontWeight: 500,
-            textTransform: "uppercase",
-            letterSpacing: "0.15em",
-          }}
-        >
-          TEAM SYNC
-        </div>
-
-        {/* Headline */}
-        <div
-          style={{
-            fontSize: 72,
-            fontWeight: 700,
-            fontFamily: theme.fontSans,
-            color: theme.text,
-            letterSpacing: "-0.03em",
-            marginTop: -16,
-          }}
-        >
-          One dev sets up. Everyone benefits.
-        </div>
-
-        {/* Flow diagram */}
-        <div style={{ display: "flex", alignItems: "center", gap: 48 }}>
-          {/* Source dev */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-            <Avatar size={72} color={theme.brand3} />
-            <span style={{ fontSize: 20, fontFamily: theme.fontMono, color: theme.brand3 }}>
-              caliber init
-            </span>
+        {/* Section label + headline */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              fontSize: 22,
+              fontFamily: theme.fontMono,
+              color: theme.brand2,
+              fontWeight: 500,
+              textTransform: "uppercase",
+              letterSpacing: "0.15em",
+            }}
+          >
+            TEAM SYNC
           </div>
+          <div
+            style={{
+              fontSize: 64,
+              fontWeight: 700,
+              fontFamily: theme.fontSans,
+              color: theme.text,
+              letterSpacing: "-0.03em",
+            }}
+          >
+            One dev sets up. Everyone benefits.
+          </div>
+        </div>
 
-          {/* Connection: orange-tinted dotted line */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        {/* 3-column flow: First Dev → Repo → Team */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0,
+            width: 1400,
+            justifyContent: "center",
+          }}
+        >
+          {/* Column 1: First dev */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 20,
+              opacity: step1Opacity,
+              width: 200,
+            }}
+          >
+            <Avatar size={72} color={theme.brand3} label="First dev" />
             <div
               style={{
-                width: 240,
-                height: 2,
-                backgroundImage: `repeating-linear-gradient(90deg, rgba(249,115,22,0.3) 0, rgba(249,115,22,0.3) 8px, transparent 8px, transparent 16px)`,
+                padding: "8px 20px",
+                borderRadius: 6,
+                backgroundColor: "rgba(249,115,22,0.1)",
               }}
-            />
-            <span style={{ fontSize: 18, fontFamily: theme.fontMono, color: theme.textMuted }}>
-              git push
+            >
+              <span style={{ fontSize: 20, fontFamily: theme.fontMono, color: theme.brand2 }}>
+                caliber init
+              </span>
+            </div>
+          </div>
+
+          {/* Arrow 1: dev → repo */}
+          <div style={{ opacity: filesOpacity, padding: "0 16px" }}>
+            <svg width={60} height={24} viewBox="0 0 60 24" fill="none">
+              <path
+                d="M0 12H50M44 6L52 12L44 18"
+                stroke={theme.brand3}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.5}
+              />
+            </svg>
+          </div>
+
+          {/* Column 2: Git repo with config files */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
+              opacity: filesOpacity,
+              width: 340,
+            }}
+          >
+            {/* Repo card */}
+            <div
+              style={{
+                backgroundColor: theme.cardBg,
+                border: `1px solid ${theme.surfaceBorder}`,
+                borderRadius: 12,
+                padding: "20px 28px",
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {/* Gradient top border */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 1,
+                  background: theme.gradientBorder,
+                }}
+              />
+
+              {/* Repo header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: 16,
+                }}
+              >
+                <svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M3 7V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V9C21 7.9 20.1 7 19 7H13L11 5H5C3.9 5 3 5.9 3 7Z"
+                    stroke={theme.textMuted}
+                    strokeWidth={1.5}
+                    fill={`${theme.textMuted}20`}
+                  />
+                </svg>
+                <span
+                  style={{
+                    fontSize: 18,
+                    fontFamily: theme.fontMono,
+                    color: theme.textMuted,
+                    fontWeight: 500,
+                  }}
+                >
+                  your-repo/
+                </span>
+              </div>
+
+              {/* Config files list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {configFiles.map((file) => (
+                  <div key={file.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+                      <rect
+                        x={2}
+                        y={1}
+                        width={12}
+                        height={14}
+                        rx={2}
+                        stroke={file.color}
+                        strokeWidth={1.2}
+                        fill={`${file.color}15`}
+                      />
+                      <path d="M5 5H11M5 8H9" stroke={file.color} strokeWidth={1} opacity={0.6} />
+                    </svg>
+                    <span
+                      style={{
+                        fontSize: 20,
+                        fontFamily: theme.fontMono,
+                        color: file.color,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {file.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <span
+              style={{
+                fontSize: 16,
+                fontFamily: theme.fontMono,
+                color: theme.textMuted,
+                opacity: 0.6,
+              }}
+            >
+              committed to git
             </span>
           </div>
 
-          {/* Receiver devs */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[theme.accent, theme.green, theme.purple].map((color) => (
-              <div key={color} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <Avatar size={52} color={color} />
-                <span style={{ fontSize: 18, fontFamily: theme.fontMono, color: theme.textMuted }}>
-                  caliber sync
-                </span>
+          {/* Arrow 2: repo → team */}
+          <div style={{ opacity: arrowOpacity, padding: "0 16px" }}>
+            <svg width={60} height={24} viewBox="0 0 60 24" fill="none">
+              <path
+                d="M0 12H50M44 6L52 12L44 18"
+                stroke={theme.brand3}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.5}
+              />
+            </svg>
+          </div>
+
+          {/* Column 3: Team members */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              width: 360,
+            }}
+          >
+            {teamMembers.map((member) => (
+              <div
+                key={member.name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  opacity: member.opacity,
+                }}
+              >
+                <Avatar size={52} color={member.color} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontFamily: theme.fontSans,
+                      color: theme.text,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {member.name}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 16,
+                      fontFamily: theme.fontMono,
+                      color: theme.textMuted,
+                    }}
+                  >
+                    git clone → full setup
+                  </span>
+                </div>
+                {/* Ready checkmark */}
+                <div style={{ marginLeft: "auto", opacity: checksOpacity }}>
+                  <svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                    <circle
+                      cx={12}
+                      cy={12}
+                      r={10}
+                      stroke={theme.green}
+                      strokeWidth={1.5}
+                      fill={`${theme.green}15`}
+                    />
+                    <path
+                      d="M8 12L11 15L16 9"
+                      stroke={theme.green}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Tagline */}
+        {/* Bottom tagline */}
         <div
           style={{
             fontSize: 28,
             fontFamily: theme.fontSans,
             color: theme.textMuted,
             fontWeight: 400,
+            opacity: checksOpacity,
           }}
         >
-          Syncs to your team via git.
+          Clone, code — same setup, every time.
         </div>
       </div>
 
@@ -162,10 +408,8 @@ export const TeamCTA: React.FC = () => {
             opacity: ctaOpacity,
           }}
         >
-          {/* Logo — the ONE spring animation */}
           <Logo size={1.2} animate delay={62} />
 
-          {/* Brand name */}
           <div
             style={{
               fontSize: 64,
@@ -179,7 +423,6 @@ export const TeamCTA: React.FC = () => {
             caliber
           </div>
 
-          {/* Tagline — LP hero */}
           <div
             style={{
               fontSize: 28,
@@ -191,13 +434,12 @@ export const TeamCTA: React.FC = () => {
             AI setup tailored for your codebase.
           </div>
 
-          {/* Command pill — LP CTA with glow */}
           <div
             style={{
               padding: "18px 44px",
               borderRadius: 8,
               backgroundColor: theme.cardBg,
-              border: `1px solid rgba(249,115,22,0.3)`,
+              border: "1px solid rgba(249,115,22,0.3)",
               boxShadow: theme.cardGlowStrong,
               opacity: commandOpacity,
             }}
@@ -210,7 +452,6 @@ export const TeamCTA: React.FC = () => {
             </span>
           </div>
 
-          {/* Platform icons */}
           <div
             style={{
               display: "flex",
