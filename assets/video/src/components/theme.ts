@@ -3,8 +3,9 @@ export const theme = {
   bg: "#09090b",
   surface: "#18181b",
   surfaceHeader: "#27272a",
-  surfaceBorder: "#3f3f46",
+  surfaceBorder: "#262626", // LP border-border (gray-800)
   surfaceHover: "#1c1c1e",
+  cardBg: "#0d0d0d", // LP card background
 
   // Brand gradient (logo bars — LP orange palette)
   brand1: "#fdba74", // lightest (orange-300)
@@ -15,16 +16,16 @@ export const theme = {
   accent: "#7dd3fc", // cyan/blue (sky-300)
   accentDim: "#38bdf8",
 
-  // Semantic
-  green: "#22c55e",
+  // Semantic (LP -400 variants for status indicators)
+  green: "#34d399", // emerald-400
   greenDim: "#16a34a",
-  red: "#ef4444",
-  yellow: "#eab308",
+  red: "#f87171", // red-400
+  yellow: "#fbbf24", // amber-400
 
   // Text (LP tokens)
   text: "#fafafa",
   textSecondary: "#a1a1aa",
-  textMuted: "#71717a",
+  textMuted: "#737373", // LP neutral-500
 
   // Typography (LP fonts)
   fontSans: "'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif",
@@ -38,7 +39,12 @@ export const theme = {
   // Additional semantic
   purple: "#c4b5fd",
 
-  // LP signature effects — subtle
+  // LP signature effects
   terminalGlow: "0 0 60px -20px rgba(249,115,22,0.08)",
   cardGlow: "0 0 30px -10px rgba(249,115,22,0.05)",
+  cardGlowStrong: "0 0 14px rgba(249,115,22,0.5), 0 0 6px #f97316",
+  heroGlow:
+    "radial-gradient(600px circle at 50% 40%, rgba(249,115,22,0.08), transparent 70%)",
+  gradientBorder:
+    "linear-gradient(90deg, transparent, rgba(249,115,22,0.5), transparent)",
 } as const;

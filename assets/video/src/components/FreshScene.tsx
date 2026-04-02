@@ -2,7 +2,6 @@ import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
 // Scene 3: "Stays Fresh" (10-14s, 120 frames)
-// One idea: Configs evolve with your code automatically.
 // Animation: opacity fades + width interpolation for divider. No springs.
 
 const diffLines = [
@@ -14,52 +13,56 @@ const diffLines = [
 export const FreshScene: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // Headline
   const headlineOpacity = interpolate(frame, [0, 15], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Card
   const cardOpacity = interpolate(frame, [10, 22], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Top section (diff)
   const diffOpacity = interpolate(frame, [18, 30], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Divider grows from center
   const dividerWidth = interpolate(frame, [36, 52], [0, 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // Bottom section (updates)
   const updatesOpacity = interpolate(frame, [48, 60], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Command pills
   const pillsOpacity = interpolate(frame, [66, 78], [0, 1], {
     extrapolateRight: "clamp",
   });
 
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 48,
+          gap: 40,
         }}
       >
+        {/* LP section label */}
+        <div
+          style={{
+            fontSize: 22,
+            fontFamily: theme.fontMono,
+            color: theme.brand2,
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            opacity: headlineOpacity,
+          }}
+        >
+          STAYS FRESH
+        </div>
+
         {/* Headline */}
         <div
           style={{
@@ -69,33 +72,47 @@ export const FreshScene: React.FC = () => {
             color: theme.text,
             letterSpacing: "-0.03em",
             opacity: headlineOpacity,
+            marginTop: -16,
           }}
         >
           Configs that keep up.
         </div>
 
-        {/* Card */}
+        {/* Card with gradient top border */}
         <div
           style={{
             width: 800,
-            backgroundColor: theme.surface,
+            backgroundColor: theme.cardBg,
             border: `1px solid ${theme.surfaceBorder}`,
             borderRadius: 16,
             overflow: "hidden",
             opacity: cardOpacity,
+            position: "relative",
           }}
         >
+          {/* Gradient top border */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+              background: theme.gradientBorder,
+            }}
+          />
+
           {/* Top: Code changes */}
           <div style={{ padding: "28px 32px", opacity: diffOpacity }}>
             <div
               style={{
-                fontSize: 20,
-                fontFamily: theme.fontSans,
-                color: theme.textMuted,
+                fontSize: 18,
+                fontFamily: theme.fontMono,
+                color: theme.brand2,
                 fontWeight: 500,
                 marginBottom: 16,
                 textTransform: "uppercase" as const,
-                letterSpacing: "0.05em",
+                letterSpacing: "0.1em",
               }}
             >
               Code changes
@@ -124,13 +141,7 @@ export const FreshScene: React.FC = () => {
                   >
                     {line.prefix}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 20,
-                      fontFamily: theme.fontMono,
-                      color: line.color,
-                    }}
-                  >
+                  <span style={{ fontSize: 20, fontFamily: theme.fontMono, color: line.color }}>
                     {line.text}
                   </span>
                 </div>
@@ -154,13 +165,13 @@ export const FreshScene: React.FC = () => {
           <div style={{ padding: "28px 32px", opacity: updatesOpacity }}>
             <div
               style={{
-                fontSize: 20,
-                fontFamily: theme.fontSans,
-                color: theme.textMuted,
+                fontSize: 18,
+                fontFamily: theme.fontMono,
+                color: theme.brand2,
                 fontWeight: 500,
                 marginBottom: 16,
                 textTransform: "uppercase" as const,
-                letterSpacing: "0.05em",
+                letterSpacing: "0.1em",
               }}
             >
               Configs update
@@ -194,19 +205,18 @@ export const FreshScene: React.FC = () => {
           </div>
         </div>
 
-        {/* Command pills */}
+        {/* Command pills — LP badge style */}
         <div style={{ display: "flex", gap: 20, opacity: pillsOpacity }}>
           {["caliber refresh", "caliber learn"].map((cmd) => (
             <div
               key={cmd}
               style={{
-                padding: "12px 28px",
-                borderRadius: 24,
-                backgroundColor: theme.surface,
-                border: `1px solid ${theme.surfaceBorder}`,
+                padding: "10px 24px",
+                borderRadius: 6,
+                backgroundColor: "rgba(249,115,22,0.1)",
               }}
             >
-              <span style={{ fontSize: 22, fontFamily: theme.fontMono, color: theme.textSecondary }}>
+              <span style={{ fontSize: 20, fontFamily: theme.fontMono, color: theme.brand2 }}>
                 {cmd}
               </span>
             </div>

@@ -14,7 +14,7 @@ const Avatar: React.FC<{ size: number; color: string }> = ({ size, color }) => (
       width: size,
       height: size,
       borderRadius: size / 2,
-      backgroundColor: theme.surface,
+      backgroundColor: theme.cardBg,
       border: `2px solid ${color}50`,
       display: "flex",
       alignItems: "center",
@@ -39,13 +39,13 @@ export const TeamCTA: React.FC = () => {
 
   const isCTAPhase = frame >= 60;
 
-  // Phase A: Team
+  // Phase A
   const teamOpacity = interpolate(frame, [0, 15, 54, 66], [0, 1, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // Phase B: CTA
+  // Phase B
   const ctaOpacity = interpolate(frame, [60, 75], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -60,12 +60,7 @@ export const TeamCTA: React.FC = () => {
   });
 
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
       {/* Phase A: Team sync */}
       <div
         style={{
@@ -73,10 +68,24 @@ export const TeamCTA: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 56,
+          gap: 48,
           opacity: teamOpacity,
         }}
       >
+        {/* LP section label */}
+        <div
+          style={{
+            fontSize: 22,
+            fontFamily: theme.fontMono,
+            color: theme.brand2,
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+          }}
+        >
+          TEAM SYNC
+        </div>
+
         {/* Headline */}
         <div
           style={{
@@ -85,19 +94,14 @@ export const TeamCTA: React.FC = () => {
             fontFamily: theme.fontSans,
             color: theme.text,
             letterSpacing: "-0.03em",
+            marginTop: -16,
           }}
         >
           One dev sets up. Everyone benefits.
         </div>
 
         {/* Flow diagram */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 48,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 48 }}>
           {/* Source dev */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
             <Avatar size={72} color={theme.brand3} />
@@ -106,13 +110,13 @@ export const TeamCTA: React.FC = () => {
             </span>
           </div>
 
-          {/* Connection: dotted line + git push */}
+          {/* Connection: orange-tinted dotted line */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
             <div
               style={{
                 width: 240,
                 height: 2,
-                backgroundImage: `repeating-linear-gradient(90deg, ${theme.surfaceBorder} 0, ${theme.surfaceBorder} 8px, transparent 8px, transparent 16px)`,
+                backgroundImage: `repeating-linear-gradient(90deg, rgba(249,115,22,0.3) 0, rgba(249,115,22,0.3) 8px, transparent 8px, transparent 16px)`,
               }}
             />
             <span style={{ fontSize: 18, fontFamily: theme.fontMono, color: theme.textMuted }}>
@@ -142,7 +146,7 @@ export const TeamCTA: React.FC = () => {
             fontWeight: 400,
           }}
         >
-          Same setup. Zero config. Day one.
+          Syncs to your team via git.
         </div>
       </div>
 
@@ -154,11 +158,11 @@ export const TeamCTA: React.FC = () => {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 32,
+            gap: 28,
             opacity: ctaOpacity,
           }}
         >
-          {/* Logo — the ONE spring animation in the whole GIF */}
+          {/* Logo — the ONE spring animation */}
           <Logo size={1.2} animate delay={62} />
 
           {/* Brand name */}
@@ -175,7 +179,7 @@ export const TeamCTA: React.FC = () => {
             caliber
           </div>
 
-          {/* Tagline */}
+          {/* Tagline — LP hero */}
           <div
             style={{
               fontSize: 28,
@@ -184,16 +188,17 @@ export const TeamCTA: React.FC = () => {
               fontWeight: 400,
             }}
           >
-            Scores. Generates. Syncs.
+            AI setup tailored for your codebase.
           </div>
 
-          {/* Command pill */}
+          {/* Command pill — LP CTA with glow */}
           <div
             style={{
               padding: "18px 44px",
-              borderRadius: 14,
-              backgroundColor: theme.surface,
-              border: `1px solid ${theme.surfaceBorder}`,
+              borderRadius: 8,
+              backgroundColor: theme.cardBg,
+              border: `1px solid rgba(249,115,22,0.3)`,
+              boxShadow: theme.cardGlowStrong,
               opacity: commandOpacity,
             }}
           >
@@ -201,7 +206,7 @@ export const TeamCTA: React.FC = () => {
               {"$ "}
             </span>
             <span style={{ fontSize: 26, fontFamily: theme.fontMono, color: theme.text }}>
-              npx @rely-ai/caliber init
+              npm install -g @rely-ai/caliber
             </span>
           </div>
 

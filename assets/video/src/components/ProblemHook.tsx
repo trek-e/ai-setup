@@ -2,23 +2,20 @@ import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
 // Scene 1: "The Hook" (0-4s, 120 frames)
-// One idea: Your AI tools are only as good as their setup.
 // Animation: opacity fades only. Zero springs. Zero transforms.
 
 export const ProblemHook: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // "Bad setup = bad agent." fades in
   const headlineOpacity = interpolate(frame, [0, 15], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Subtitle fades in after headline
   const subtitleOpacity = interpolate(frame, [20, 35], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // At frame 50, crossfade: first headline fades out, second fades in
+  // At frame 50, crossfade headline 1 → headline 2
   const headline1Opacity = interpolate(frame, [50, 65], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -29,22 +26,40 @@ export const ProblemHook: React.FC = () => {
   });
 
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 28,
+          gap: 24,
         }}
       >
-        {/* Headline area — fixed position, crossfade between two texts */}
-        <div style={{ position: "relative", height: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {/* LP section label */}
+        <div
+          style={{
+            fontSize: 22,
+            fontFamily: theme.fontMono,
+            color: theme.brand2,
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            opacity: headlineOpacity,
+          }}
+        >
+          THE PROBLEM
+        </div>
+
+        {/* Headline crossfade */}
+        <div
+          style={{
+            position: "relative",
+            height: 100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <div
             style={{
               position: "absolute",
@@ -75,7 +90,7 @@ export const ProblemHook: React.FC = () => {
           </div>
         </div>
 
-        {/* Subtitle — fades out with first headline */}
+        {/* Subtitle */}
         <div
           style={{
             fontSize: 32,
@@ -85,8 +100,19 @@ export const ProblemHook: React.FC = () => {
             opacity: subtitleOpacity * headline1Opacity,
           }}
         >
-          Most teams ship with zero AI context.
+          Scores your AI setup. Generates what's missing.
         </div>
+
+        {/* Accent line */}
+        <div
+          style={{
+            width: 80,
+            height: 2,
+            backgroundColor: theme.brand3,
+            borderRadius: 1,
+            opacity: subtitleOpacity * headline1Opacity * 0.3,
+          }}
+        />
       </div>
     </AbsoluteFill>
   );

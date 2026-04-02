@@ -2,7 +2,6 @@ import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
 // Scene 2: "Score + Init" (4-10s, 180 frames) — HERO SCENE
-// One idea: One command scores your setup and generates what's missing.
 // Animation: opacity fades + SVG arc stroke. No springs.
 
 const terminalLines = [
@@ -13,7 +12,6 @@ const terminalLines = [
   { text: "Score: 94/100 — Grade A", color: theme.green, delay: 84 },
 ];
 
-// Score arc: fills from 0 to 94%
 const ARC_RADIUS = 54;
 const ARC_CIRCUMFERENCE = 2 * Math.PI * ARC_RADIUS;
 const SCORE_TARGET = 94;
@@ -27,17 +25,14 @@ const getScoreColor = (progress: number): string => {
 export const InitScene: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // Subtitle
   const subtitleOpacity = interpolate(frame, [0, 12], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Terminal card
   const cardOpacity = interpolate(frame, [6, 18], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Score arc appears after all lines
   const arcProgress = interpolate(frame, [100, 140], [0, SCORE_TARGET / 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -46,7 +41,6 @@ export const InitScene: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  // Score number counts up
   const scoreNumber = Math.round(
     interpolate(frame, [100, 140], [0, SCORE_TARGET], {
       extrapolateLeft: "clamp",
@@ -56,21 +50,34 @@ export const InitScene: React.FC = () => {
 
   const strokeDashoffset = ARC_CIRCUMFERENCE * (1 - arcProgress);
 
+  // Blinking cursor: toggles every 15 frames (0.5s)
+  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
+
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 40,
+          gap: 32,
         }}
       >
+        {/* LP section label */}
+        <div
+          style={{
+            fontSize: 22,
+            fontFamily: theme.fontMono,
+            color: theme.brand2,
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            opacity: subtitleOpacity,
+          }}
+        >
+          MEET CALIBER
+        </div>
+
         {/* Subtitle */}
         <div
           style={{
@@ -90,11 +97,12 @@ export const InitScene: React.FC = () => {
           <div
             style={{
               width: 860,
-              backgroundColor: theme.surface,
+              backgroundColor: theme.cardBg,
               border: `1px solid ${theme.surfaceBorder}`,
               borderRadius: 16,
               overflow: "hidden",
               opacity: cardOpacity,
+              boxShadow: theme.terminalGlow,
             }}
           >
             {/* Terminal header */}
@@ -108,9 +116,9 @@ export const InitScene: React.FC = () => {
                 gap: 10,
               }}
             >
-              <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: "#ef4444" }} />
-              <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: "#eab308" }} />
-              <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: "#22c55e" }} />
+              <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.red }} />
+              <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.yellow }} />
+              <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.green }} />
               <span
                 style={{
                   marginLeft: 12,
@@ -119,16 +127,22 @@ export const InitScene: React.FC = () => {
                   color: theme.textMuted,
                 }}
               >
-                ${" "}
+                {"$ "}
               </span>
+              <span style={{ fontSize: 20, fontFamily: theme.fontMono, color: theme.text }}>
+                caliber init
+              </span>
+              {/* Blinking cursor */}
               <span
                 style={{
                   fontSize: 20,
                   fontFamily: theme.fontMono,
-                  color: theme.text,
+                  color: theme.brand3,
+                  opacity: cursorVisible ? 1 : 0,
+                  marginLeft: 2,
                 }}
               >
-                caliber init
+                |
               </span>
             </div>
 
@@ -164,13 +178,27 @@ export const InitScene: React.FC = () => {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 12,
+              gap: 8,
               opacity: arcOpacity,
             }}
           >
+            {/* Score label */}
+            <div
+              style={{
+                fontSize: 18,
+                fontFamily: theme.fontMono,
+                color: theme.brand2,
+                fontWeight: 500,
+                textTransform: "uppercase",
+                letterSpacing: "0.15em",
+                marginBottom: 8,
+              }}
+            >
+              CALIBER SCORE
+            </div>
+
             <div style={{ position: "relative", width: 140, height: 140 }}>
               <svg width={140} height={140} viewBox="0 0 140 140">
-                {/* Background circle */}
                 <circle
                   cx={70}
                   cy={70}
@@ -179,7 +207,6 @@ export const InitScene: React.FC = () => {
                   stroke={theme.surfaceBorder}
                   strokeWidth={6}
                 />
-                {/* Progress arc */}
                 <circle
                   cx={70}
                   cy={70}
@@ -193,7 +220,6 @@ export const InitScene: React.FC = () => {
                   transform="rotate(-90 70 70)"
                 />
               </svg>
-              {/* Score number centered */}
               <div
                 style={{
                   position: "absolute",

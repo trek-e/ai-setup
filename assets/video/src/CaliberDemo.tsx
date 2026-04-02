@@ -34,6 +34,17 @@ const CrossFade: React.FC<{ children: React.ReactNode; from: number; duration: n
 export const CaliberDemo: React.FC = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: theme.bg, fontFamily: theme.fontSans }}>
+      {/* LP ambient orange glow */}
+      <div
+        style={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          background: theme.heroGlow,
+          pointerEvents: "none",
+        }}
+      />
+
       {/* Scene 1: Hook */}
       <CrossFade from={0} duration={120}>
         <Sequence from={0} durationInFrames={120}>
