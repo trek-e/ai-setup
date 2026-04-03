@@ -44,7 +44,7 @@ export const ProblemHook: React.FC = () => {
             fontWeight: 500,
             textTransform: "uppercase",
             letterSpacing: "0.15em",
-            opacity: headlineOpacity,
+            opacity: headlineOpacity * headline1Opacity,
           }}
         >
           THE PROBLEM
