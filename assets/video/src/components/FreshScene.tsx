@@ -4,6 +4,52 @@ import { theme } from "./theme";
 // Scene 3: "Stays Fresh" (412-580, 168 frames)
 // Animation: opacity fades + width interpolation for divider. No springs.
 
+// Redis logo — simplified diamond shape
+const RedisLogo: React.FC<{ size: number; opacity?: number }> = ({ size, opacity = 1 }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" style={{ opacity }}>
+    <path
+      d="M16 2L30 10V22L16 30L2 22V10L16 2Z"
+      fill="rgba(248,113,113,0.15)"
+      stroke="#f87171"
+      strokeWidth={1.5}
+    />
+    <text
+      x="16"
+      y="19"
+      textAnchor="middle"
+      fill="#f87171"
+      fontSize="11"
+      fontWeight="700"
+      fontFamily={theme.fontMono}
+    >
+      R
+    </text>
+  </svg>
+);
+
+// Aerospike logo — simplified A in hexagon
+const AerospikeLogo: React.FC<{ size: number; opacity?: number }> = ({ size, opacity = 1 }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" style={{ opacity }}>
+    <path
+      d="M16 2L30 10V22L16 30L2 22V10L16 2Z"
+      fill="rgba(52,211,153,0.15)"
+      stroke="#34d399"
+      strokeWidth={1.5}
+    />
+    <text
+      x="16"
+      y="19"
+      textAnchor="middle"
+      fill="#34d399"
+      fontSize="11"
+      fontWeight="700"
+      fontFamily={theme.fontMono}
+    >
+      A
+    </text>
+  </svg>
+);
+
 const diffLines = [
   { prefix: " ", text: "// services/cache/client.ts", color: theme.textMuted },
   { prefix: "-", text: "import Redis from 'ioredis'", color: theme.red },
@@ -83,6 +129,69 @@ export const FreshScene: React.FC = () => {
           }}
         >
           Configs that keep up.
+        </div>
+
+        {/* Migration visual: Redis → Aerospike with logos */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 24,
+            opacity: cardOpacity,
+          }}
+        >
+          {/* Redis — crossed out */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
+            <RedisLogo size={36} />
+            <span
+              style={{
+                fontSize: 24,
+                fontFamily: theme.fontMono,
+                color: theme.red,
+                fontWeight: 600,
+              }}
+            >
+              Redis
+            </span>
+            {/* Strikethrough line */}
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: -4,
+                right: -4,
+                height: 2,
+                backgroundColor: theme.red,
+                opacity: 0.6,
+              }}
+            />
+          </div>
+
+          {/* Arrow */}
+          <svg width={40} height={20} viewBox="0 0 40 20" fill="none">
+            <path
+              d="M0 10H32M26 4L34 10L26 16"
+              stroke={theme.textMuted}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+
+          {/* Aerospike — new */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <AerospikeLogo size={36} />
+            <span
+              style={{
+                fontSize: 24,
+                fontFamily: theme.fontMono,
+                color: theme.green,
+                fontWeight: 600,
+              }}
+            >
+              Aerospike
+            </span>
+          </div>
         </div>
 
         {/* Card with gradient top border */}
