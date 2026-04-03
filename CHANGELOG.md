@@ -1,3 +1,9 @@
+## v1.40.4 (2026-04-03)
+
+### Bug Fixes
+
+- prevent CWD corruption and state desync in refresh/learn (#122)
+
 ## v1.40.3 (2026-04-03)
 
 ### Bug Fixes
