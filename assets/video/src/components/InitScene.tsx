@@ -1,15 +1,15 @@
 import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
-// Scene 2: "Score + Init" (4-10s, 180 frames) — HERO SCENE
+// Scene 2: "Score + Init" (172-410, 238 frames) — HERO SCENE
 // Animation: opacity fades + SVG arc stroke. No springs.
 
 const terminalLines = [
-  { text: "Scanning project...", color: theme.textMuted, delay: 12 },
-  { text: "Detected: Next.js + Drizzle + PostgreSQL", color: theme.brand2, delay: 30 },
-  { text: "Generated CLAUDE.md, .cursor/rules/, AGENTS.md", color: theme.accent, delay: 48 },
-  { text: "Installed 4 MCPs from community", color: theme.purple, delay: 66 },
-  { text: "Score: 94/100 — Grade A", color: theme.green, delay: 84 },
+  { text: "Scanning project...", color: theme.textMuted, delay: 16 },
+  { text: "Detected: Next.js + Drizzle + PostgreSQL", color: theme.brand2, delay: 40 },
+  { text: "Generated CLAUDE.md, .cursor/rules/, AGENTS.md", color: theme.accent, delay: 64 },
+  { text: "Installed 4 MCPs from community", color: theme.purple, delay: 88 },
+  { text: "Score: 94/100 — Grade A", color: theme.green, delay: 112 },
 ];
 
 const ARC_RADIUS = 54;
@@ -33,16 +33,16 @@ export const InitScene: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  const arcProgress = interpolate(frame, [100, 140], [0, SCORE_TARGET / 100], {
+  const arcProgress = interpolate(frame, [130, 180], [0, SCORE_TARGET / 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const arcOpacity = interpolate(frame, [96, 108], [0, 1], {
+  const arcOpacity = interpolate(frame, [124, 138], [0, 1], {
     extrapolateRight: "clamp",
   });
 
   const scoreNumber = Math.round(
-    interpolate(frame, [100, 140], [0, SCORE_TARGET], {
+    interpolate(frame, [130, 180], [0, SCORE_TARGET], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     }),

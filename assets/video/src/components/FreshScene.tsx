@@ -1,41 +1,47 @@
 import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
-// Scene 3: "Stays Fresh" (10-14s, 120 frames)
+// Scene 3: "Stays Fresh" (412-580, 168 frames)
 // Animation: opacity fades + width interpolation for divider. No springs.
 
 const diffLines = [
-  { prefix: " ", text: "// api/src/routes/auth.ts", color: theme.textMuted },
-  { prefix: "-", text: 'app.use(expressSession({ store: redis }))', color: theme.red },
-  { prefix: "+", text: "app.use(lucia({ adapter: drizzleAdapter }))", color: theme.green },
-  { prefix: "+", text: '// migrated from Redis sessions → Lucia Auth', color: theme.green },
+  { prefix: " ", text: "// services/cache/client.ts", color: theme.textMuted },
+  { prefix: "-", text: "import Redis from 'ioredis'", color: theme.red },
+  { prefix: "-", text: "const cache = new Redis(process.env.REDIS_URL)", color: theme.red },
+  { prefix: "+", text: "import Aerospike from 'aerospike'", color: theme.green },
+  { prefix: "+", text: "const cache = Aerospike.connect(config)", color: theme.green },
 ];
 
 export const FreshScene: React.FC = () => {
   const frame = useCurrentFrame();
 
-  const headlineOpacity = interpolate(frame, [0, 15], [0, 1], {
+  const headlineOpacity = interpolate(frame, [0, 18], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const cardOpacity = interpolate(frame, [10, 22], [0, 1], {
+  const cardOpacity = interpolate(frame, [14, 28], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const diffOpacity = interpolate(frame, [18, 30], [0, 1], {
+  const diffOpacity = interpolate(frame, [24, 38], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const dividerWidth = interpolate(frame, [36, 52], [0, 100], {
+  // Warning banner appears after the diff — shows why stale configs are dangerous
+  const warningOpacity = interpolate(frame, [44, 58], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  const dividerWidth = interpolate(frame, [64, 82], [0, 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const updatesOpacity = interpolate(frame, [48, 60], [0, 1], {
+  const updatesOpacity = interpolate(frame, [78, 92], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const pillsOpacity = interpolate(frame, [66, 78], [0, 1], {
+  const pillsOpacity = interpolate(frame, [100, 114], [0, 1], {
     extrapolateRight: "clamp",
   });
 
@@ -46,7 +52,7 @@ export const FreshScene: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 40,
+          gap: 32,
         }}
       >
         {/* LP section label */}
@@ -73,7 +79,7 @@ export const FreshScene: React.FC = () => {
             color: theme.text,
             letterSpacing: "-0.03em",
             opacity: headlineOpacity,
-            marginTop: -16,
+            marginTop: -12,
           }}
         >
           Configs that keep up.
@@ -82,7 +88,7 @@ export const FreshScene: React.FC = () => {
         {/* Card with gradient top border */}
         <div
           style={{
-            width: 800,
+            width: 860,
             backgroundColor: theme.cardBg,
             border: `1px solid ${theme.surfaceBorder}`,
             borderRadius: 16,
@@ -103,36 +109,64 @@ export const FreshScene: React.FC = () => {
             }}
           />
 
-          {/* Top: Code changes */}
-          <div style={{ padding: "28px 32px", opacity: diffOpacity }}>
+          {/* Top: Code changes — the migration diff */}
+          <div style={{ padding: "24px 32px", opacity: diffOpacity }}>
             <div
               style={{
-                fontSize: 18,
-                fontFamily: theme.fontMono,
-                color: theme.brand2,
-                fontWeight: 500,
-                marginBottom: 16,
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.1em",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 14,
               }}
             >
-              Code changes
+              <div
+                style={{
+                  fontSize: 18,
+                  fontFamily: theme.fontMono,
+                  color: theme.brand2,
+                  fontWeight: 500,
+                  textTransform: "uppercase" as const,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                Code changes
+              </div>
+              {/* Migration badge */}
+              <div
+                style={{
+                  padding: "3px 12px",
+                  borderRadius: 4,
+                  backgroundColor: "rgba(248,113,113,0.1)",
+                  border: `1px solid rgba(248,113,113,0.25)`,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontFamily: theme.fontMono,
+                    color: theme.red,
+                    fontWeight: 500,
+                  }}
+                >
+                  Redis → Aerospike
+                </span>
+              </div>
             </div>
             <div
               style={{
                 backgroundColor: theme.surfaceHeader,
                 borderRadius: 8,
-                padding: "16px 20px",
+                padding: "14px 20px",
                 display: "flex",
                 flexDirection: "column",
-                gap: 4,
+                gap: 3,
               }}
             >
               {diffLines.map((line) => (
                 <div key={line.text} style={{ display: "flex", gap: 12 }}>
                   <span
                     style={{
-                      fontSize: 20,
+                      fontSize: 19,
                       fontFamily: theme.fontMono,
                       color: line.color,
                       fontWeight: 500,
@@ -142,11 +176,64 @@ export const FreshScene: React.FC = () => {
                   >
                     {line.prefix}
                   </span>
-                  <span style={{ fontSize: 20, fontFamily: theme.fontMono, color: line.color }}>
+                  <span style={{ fontSize: 19, fontFamily: theme.fontMono, color: line.color }}>
                     {line.text}
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Warning: agent still references Redis patterns */}
+          <div style={{ padding: "0 32px 20px", opacity: warningOpacity }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "14px 20px",
+                borderRadius: 8,
+                backgroundColor: "rgba(248,113,113,0.06)",
+                border: `1px solid rgba(248,113,113,0.15)`,
+              }}
+            >
+              {/* Warning icon */}
+              <svg width={22} height={22} viewBox="0 0 22 22" fill="none">
+                <path
+                  d="M11 2L1 20H21L11 2Z"
+                  stroke={theme.yellow}
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                  fill={`${theme.yellow}15`}
+                />
+                <path
+                  d="M11 9V13M11 16V16.5"
+                  stroke={theme.yellow}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span
+                  style={{
+                    fontSize: 17,
+                    fontFamily: theme.fontMono,
+                    color: theme.yellow,
+                    fontWeight: 600,
+                  }}
+                >
+                  Agent configs still reference Redis APIs
+                </span>
+                <span
+                  style={{
+                    fontSize: 15,
+                    fontFamily: theme.fontMono,
+                    color: theme.textMuted,
+                  }}
+                >
+                  CLAUDE.md, .cursor/rules/ — outdated cache patterns
+                </span>
+              </div>
             </div>
           </div>
 
@@ -162,23 +249,26 @@ export const FreshScene: React.FC = () => {
             />
           </div>
 
-          {/* Bottom: Configs update */}
-          <div style={{ padding: "28px 32px", opacity: updatesOpacity }}>
+          {/* Bottom: Caliber auto-updates configs */}
+          <div style={{ padding: "24px 32px", opacity: updatesOpacity }}>
             <div
               style={{
                 fontSize: 18,
                 fontFamily: theme.fontMono,
                 color: theme.brand2,
                 fontWeight: 500,
-                marginBottom: 16,
+                marginBottom: 14,
                 textTransform: "uppercase" as const,
                 letterSpacing: "0.1em",
               }}
             >
-              Configs update
+              Caliber auto-updates
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {["CLAUDE.md — auth stack updated", ".cursor/rules/ — session patterns fixed"].map((text) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                "CLAUDE.md — cache layer → Aerospike",
+                ".cursor/rules/ — Redis patterns removed",
+              ].map((text) => (
                 <div key={text} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <svg width={20} height={20} viewBox="0 0 20 20" fill="none">
                     <circle cx={10} cy={10} r={9} stroke={theme.green} strokeWidth={1.5} opacity={0.4} />
@@ -192,7 +282,7 @@ export const FreshScene: React.FC = () => {
                   </svg>
                   <span
                     style={{
-                      fontSize: 24,
+                      fontSize: 22,
                       fontFamily: theme.fontMono,
                       color: theme.text,
                       fontWeight: 500,

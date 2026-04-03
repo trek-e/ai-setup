@@ -3,9 +3,9 @@ import { theme } from "./theme";
 import { Logo } from "./Logo";
 import { ClaudeIcon, CursorIcon, CodexIcon, CopilotIcon } from "./ToolIcons";
 
-// Scene 4: "Team + CTA" (14-18s, 120 frames)
-// Phase A (0-60): The story — first dev creates configs, team gets them via git
-// Phase B (60-120): CTA
+// Scene 4: "Team + CTA" (582-720, 138 frames)
+// Phase A (0-80): The story — first dev creates configs, team gets them via git
+// Phase B (80-138): CTA
 // Animation: opacity fades only. Springs only for Logo.
 
 const Avatar: React.FC<{ size: number; color: string; label?: string }> = ({
@@ -55,47 +55,47 @@ const configFiles = [
 export const TeamCTA: React.FC = () => {
   const frame = useCurrentFrame();
 
-  const isCTAPhase = frame >= 60;
+  const isCTAPhase = frame >= 80;
 
   // Phase A timing
-  const teamOpacity = interpolate(frame, [0, 15, 54, 66], [0, 1, 1, 0], {
+  const teamOpacity = interpolate(frame, [0, 15, 72, 84], [0, 1, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   // Step 1: First dev + "caliber init" (frames 0-15)
-  const step1Opacity = interpolate(frame, [0, 12], [0, 1], {
+  const step1Opacity = interpolate(frame, [0, 14], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Step 2: Config files appear in repo column (frames 14-24)
-  const filesOpacity = interpolate(frame, [14, 24], [0, 1], {
+  // Step 2: Config files appear in repo column (frames 16-28)
+  const filesOpacity = interpolate(frame, [16, 28], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Step 3: Arrow from repo to team (frames 22-30)
-  const arrowOpacity = interpolate(frame, [22, 30], [0, 1], {
+  // Step 3: Arrow from repo to team (frames 28-38)
+  const arrowOpacity = interpolate(frame, [28, 38], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Step 4: Team members appear with their own config badges (frames 28-42)
-  const team1Opacity = interpolate(frame, [28, 36], [0, 1], { extrapolateRight: "clamp" });
-  const team2Opacity = interpolate(frame, [32, 40], [0, 1], { extrapolateRight: "clamp" });
-  const team3Opacity = interpolate(frame, [36, 44], [0, 1], { extrapolateRight: "clamp" });
+  // Step 4: Team members appear with their own config badges (frames 36-54)
+  const team1Opacity = interpolate(frame, [36, 44], [0, 1], { extrapolateRight: "clamp" });
+  const team2Opacity = interpolate(frame, [42, 50], [0, 1], { extrapolateRight: "clamp" });
+  const team3Opacity = interpolate(frame, [48, 56], [0, 1], { extrapolateRight: "clamp" });
 
-  // Step 5: "Ready" checkmarks next to each team member (frames 40-50)
-  const checksOpacity = interpolate(frame, [40, 50], [0, 1], { extrapolateRight: "clamp" });
+  // Step 5: "Ready" checkmarks next to each team member (frames 54-66)
+  const checksOpacity = interpolate(frame, [54, 66], [0, 1], { extrapolateRight: "clamp" });
 
   // Phase B
-  const ctaOpacity = interpolate(frame, [60, 75], [0, 1], {
+  const ctaOpacity = interpolate(frame, [80, 95], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const commandOpacity = interpolate(frame, [78, 90], [0, 1], {
+  const commandOpacity = interpolate(frame, [98, 110], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const platformsOpacity = interpolate(frame, [88, 100], [0, 1], {
+  const platformsOpacity = interpolate(frame, [108, 120], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -408,7 +408,7 @@ export const TeamCTA: React.FC = () => {
             opacity: ctaOpacity,
           }}
         >
-          <Logo size={1.2} animate delay={62} />
+          <Logo size={1.2} animate delay={82} />
 
           <div
             style={{

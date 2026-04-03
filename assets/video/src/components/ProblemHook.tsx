@@ -1,26 +1,26 @@
 import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
-// Scene 1: "The Hook" (0-4s, 120 frames)
+// Scene 1: "The Hook" (0-170 frames, ~5.7s)
 // Animation: opacity fades only. Zero springs. Zero transforms.
 
 export const ProblemHook: React.FC = () => {
   const frame = useCurrentFrame();
 
-  const headlineOpacity = interpolate(frame, [0, 15], [0, 1], {
+  const headlineOpacity = interpolate(frame, [0, 18], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const subtitleOpacity = interpolate(frame, [20, 35], [0, 1], {
+  const subtitleOpacity = interpolate(frame, [24, 42], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // At frame 50, crossfade headline 1 → headline 2
-  const headline1Opacity = interpolate(frame, [50, 65], [1, 0], {
+  // At frame 75, crossfade headline 1 → headline 2 (more breathing room)
+  const headline1Opacity = interpolate(frame, [75, 92], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const headline2Opacity = interpolate(frame, [50, 65], [0, 1], {
+  const headline2Opacity = interpolate(frame, [75, 92], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
