@@ -41,6 +41,7 @@ function resolveAgentBin(): string {
 export function resetAgentBin(): void {
   _agentBin = null;
 }
+
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const SIGKILL_DELAY_MS = 5000;
 const STDERR_MAX_BYTES = 10 * 1024;
