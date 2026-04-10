@@ -11,6 +11,7 @@ import type { LLMConfig } from '../types.js';
 const IS_WINDOWS = process.platform === 'win32';
 const spawn = vi.fn();
 const execSync = vi.fn();
+const execFileSync = vi.fn();
 // accessSync mock: default throws (not executable) — tests override as needed
 const accessSync = vi.fn<(path: import('fs').PathLike | number, mode?: number) => void>(() => {
   throw new Error('not found');
@@ -19,6 +20,7 @@ const accessSync = vi.fn<(path: import('fs').PathLike | number, mode?: number) =
 vi.mock('node:child_process', () => ({
   spawn: (...args: unknown[]) => spawn(...args),
   execSync: (...args: unknown[]) => execSync(...args),
+  execFileSync: (...args: unknown[]) => execFileSync(...args),
 }));
 
 vi.mock('node:fs', async () => {
@@ -329,42 +331,42 @@ describe('isClaudeCliAvailable', () => {
 
 describe('isClaudeCliLoggedIn', () => {
   beforeEach(() => {
-    execSync.mockReset();
+    execFileSync.mockReset();
     resetClaudeCliLoginCache();
   });
 
   it('returns true when auth status reports loggedIn true', () => {
-    execSync.mockReturnValue(Buffer.from(JSON.stringify({ loggedIn: true })));
+    execFileSync.mockReturnValue(Buffer.from(JSON.stringify({ loggedIn: true })));
     expect(isClaudeCliLoggedIn()).toBe(true);
   });
 
   it('returns false when auth status reports loggedIn false', () => {
-    execSync.mockReturnValue(Buffer.from(JSON.stringify({ loggedIn: false })));
+    execFileSync.mockReturnValue(Buffer.from(JSON.stringify({ loggedIn: false })));
     expect(isClaudeCliLoggedIn()).toBe(false);
   });
 
   it('returns false when auth status command fails', () => {
-    execSync.mockImplementation(() => {
+    execFileSync.mockImplementation(() => {
       throw new Error('exit code 1');
     });
     expect(isClaudeCliLoggedIn()).toBe(false);
   });
 
   it('returns true for non-JSON output without not logged in', () => {
-    execSync.mockReturnValue(Buffer.from('some unexpected output'));
+    execFileSync.mockReturnValue(Buffer.from('some unexpected output'));
     expect(isClaudeCliLoggedIn()).toBe(true);
   });
 
   it('returns false for non-JSON output containing not logged in', () => {
-    execSync.mockReturnValue(Buffer.from('not logged in'));
+    execFileSync.mockReturnValue(Buffer.from('not logged in'));
     expect(isClaudeCliLoggedIn()).toBe(false);
   });
 
   it('caches the result across calls', () => {
-    execSync.mockReturnValue(Buffer.from(JSON.stringify({ loggedIn: true })));
+    execFileSync.mockReturnValue(Buffer.from(JSON.stringify({ loggedIn: true })));
     expect(isClaudeCliLoggedIn()).toBe(true);
-    execSync.mockReset();
+    execFileSync.mockReset();
     expect(isClaudeCliLoggedIn()).toBe(true);
-    expect(execSync).not.toHaveBeenCalled();
+    expect(execFileSync).not.toHaveBeenCalled();
   });
 });
