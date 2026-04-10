@@ -55,9 +55,12 @@ function resolveClaudeBin(): string {
 
   // 2. Probe well-known install locations (PATH-independent — works in hook subprocesses)
   for (const candidate of candidateClaudePaths()) {
-    if (fs.existsSync(candidate)) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
       _claudeBin = candidate;
       return _claudeBin;
+    } catch {
+      // not executable or not found — try next candidate
     }
   }
 
