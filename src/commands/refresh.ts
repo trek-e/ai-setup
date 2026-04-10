@@ -130,18 +130,28 @@ const REFRESH_COOLDOWN_MS = 30_000;
 // Caps concurrency to avoid rate-limit storms on lower-tier provider plans.
 const PARALLEL_DIR_CONCURRENCY = 4;
 
+interface RefreshDirResult {
+  written: string[];
+  fileChanges: Array<{ file: string; description: string }>;
+  syncedAgents: string[];
+  changesSummary: string | null | undefined;
+}
+
 async function refreshDir(
   repoDir: string,
   dir: string,
   diff: DiffResult,
-  options: RefreshOptions & { label?: string },
-): Promise<{ written: string[] }> {
+  options: RefreshOptions & { label?: string; suppressSpinner?: boolean },
+): Promise<RefreshDirResult> {
   const quiet = !!options.quiet;
+  // suppressSpinner: suppress spinner + all log output; caller prints results after settling
+  const suppress = !!options.suppressSpinner;
+  const effectiveQuiet = quiet || suppress;
   const prefix = options.label ? `${chalk.bold(options.label)} ` : '';
   const absDir = dir === '.' ? repoDir : path.resolve(repoDir, dir);
   const scope = dir === '.' ? undefined : dir;
 
-  const spinner = quiet ? null : ora(`${prefix}Analyzing changes...`).start();
+  const spinner = effectiveQuiet ? null : ora(`${prefix}Analyzing changes...`).start();
 
   const learnedSection = readLearnedSection();
   const fingerprint = await collectFingerprint(absDir);
@@ -198,7 +208,7 @@ async function refreshDir(
 
   if (!response.docsUpdated || response.docsUpdated.length === 0) {
     spinner?.succeed(`${prefix}No doc updates needed`);
-    return { written: [] };
+    return { written: [], fileChanges: [], syncedAgents: [], changesSummary: null };
   }
 
   if (options.dryRun) {
@@ -209,7 +219,7 @@ async function refreshDir(
     if (response.changesSummary) {
       console.log(chalk.dim(`\n  ${response.changesSummary}`));
     }
-    return { written: [] };
+    return { written: [], fileChanges: [], syncedAgents: [], changesSummary: null };
   }
 
   const allFilesToWrite = collectFilesToWrite(response.updatedDocs, dir);
@@ -252,37 +262,42 @@ async function refreshDir(
       spinner?.warn(
         `${prefix}Refresh reverted — score would drop from ${preScore.score} to ${postScore.score}`,
       );
-      log(quiet, chalk.dim(`  Config quality gate prevented a regression. No files were changed.`));
-      return { written: [] };
+      log(
+        effectiveQuiet,
+        chalk.dim(`  Config quality gate prevented a regression. No files were changed.`),
+      );
+      return { written: [], fileChanges: [], syncedAgents: [], changesSummary: null };
     }
     recordScore(postScore, 'refresh');
   }
 
   spinner?.succeed(`${prefix}Updated ${written.length} doc${written.length === 1 ? '' : 's'}`);
 
-  const fileChangesMap = new Map(
-    (response.fileChanges || []).map((fc: { file: string; description: string }) => [
-      fc.file,
-      fc.description,
-    ]),
-  );
+  const fileChanges: Array<{ file: string; description: string }> = response.fileChanges || [];
+  const fileChangesMap = new Map(fileChanges.map((fc) => [fc.file, fc.description]));
+  const syncedAgents = detectSyncedAgents(written);
 
-  for (const file of written) {
-    const desc = fileChangesMap.get(file);
-    const suffix = desc ? chalk.dim(` — ${desc}`) : '';
-    log(quiet, `  ${chalk.green('✓')} ${file}${suffix}`);
+  // When suppress is true, skip per-file output — caller prints results sequentially after settling.
+  if (!suppress) {
+    for (const file of written) {
+      const desc = fileChangesMap.get(file);
+      const suffix = desc ? chalk.dim(` — ${desc}`) : '';
+      log(effectiveQuiet, `  ${chalk.green('✓')} ${file}${suffix}`);
+    }
+
+    if (syncedAgents.length > 1) {
+      log(
+        effectiveQuiet,
+        chalk.cyan(`\n  ${syncedAgents.length} agent formats in sync (${syncedAgents.join(', ')})`),
+      );
+    }
+
+    if (response.changesSummary) {
+      log(effectiveQuiet, chalk.dim(`\n  ${response.changesSummary}`));
+    }
   }
 
-  const agents = detectSyncedAgents(written);
-  if (agents.length > 1) {
-    log(quiet, chalk.cyan(`\n  ${agents.length} agent formats in sync (${agents.join(', ')})`));
-  }
-
-  if (response.changesSummary) {
-    log(quiet, chalk.dim(`\n  ${response.changesSummary}`));
-  }
-
-  return { written };
+  return { written, fileChanges, syncedAgents, changesSummary: response.changesSummary };
 }
 
 async function refreshSingleRepo(
@@ -339,13 +354,18 @@ async function refreshSingleRepo(
 
     // Refresh all dirs in parallel with a concurrency cap to avoid provider rate limits.
     // Promise.allSettled ensures a failure in one dir doesn't prevent the others.
+    // suppressSpinner keeps quiet/hook mode intact while buffering per-dir output so
+    // results are printed sequentially after all promises settle (no interleaving).
     const limit = pLimit(PARALLEL_DIR_CONCURRENCY);
     const results = await Promise.allSettled(
       dirsWithChanges.map(({ dir, scopedDiff }) => {
         const dirLabel = dir === '.' ? 'root' : dir;
-        // Pass quiet:true to suppress per-dir spinners — managed by parallelSpinner above.
         return limit(() =>
-          refreshDir(repoDir, dir, scopedDiff, { ...options, quiet: true, label: dirLabel }),
+          refreshDir(repoDir, dir, scopedDiff, {
+            ...options,
+            suppressSpinner: true,
+            label: dirLabel,
+          }),
         );
       }),
     );
@@ -355,7 +375,8 @@ async function refreshSingleRepo(
     // Print results sequentially so output is readable after all promises settle.
     let hadFailure = false;
     for (const [i, result] of results.entries()) {
-      const dirLabel = dirsWithChanges[i].dir === '.' ? 'root' : dirsWithChanges[i].dir;
+      const { dir } = dirsWithChanges[i];
+      const dirLabel = dir === '.' ? 'root' : dir;
       if (result.status === 'rejected') {
         hadFailure = true;
         log(
@@ -365,8 +386,23 @@ async function refreshSingleRepo(
           ),
         );
       } else {
-        for (const file of result.value.written) {
-          log(quiet, `  ${chalk.green('✓')} ${dirLabel}/${file}`);
+        const { written, fileChanges, syncedAgents, changesSummary } = result.value;
+        const fileChangesMap = new Map(fileChanges.map((fc) => [fc.file, fc.description]));
+        for (const file of written) {
+          const desc = fileChangesMap.get(file);
+          const suffix = desc ? chalk.dim(` — ${desc}`) : '';
+          log(quiet, `  ${chalk.green('✓')} ${dirLabel}/${file}${suffix}`);
+        }
+        if (syncedAgents.length > 1) {
+          log(
+            quiet,
+            chalk.cyan(
+              `\n  ${syncedAgents.length} agent formats in sync (${syncedAgents.join(', ')})`,
+            ),
+          );
+        }
+        if (changesSummary) {
+          log(quiet, chalk.dim(`\n  ${changesSummary}`));
         }
       }
     }

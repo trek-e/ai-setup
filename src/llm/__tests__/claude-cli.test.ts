@@ -11,7 +11,10 @@ import type { LLMConfig } from '../types.js';
 const IS_WINDOWS = process.platform === 'win32';
 const spawn = vi.fn();
 const execSync = vi.fn();
-const existsSync = vi.fn(() => false);
+// accessSync mock: default throws (not executable) — tests override as needed
+const accessSync = vi.fn<(path: import('fs').PathLike | number, mode?: number) => void>(() => {
+  throw new Error('not found');
+});
 
 vi.mock('node:child_process', () => ({
   spawn: (...args: unknown[]) => spawn(...args),
@@ -22,7 +25,10 @@ vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
   return {
     ...actual,
-    default: { ...actual, existsSync: (...args: unknown[]) => existsSync(...args) },
+    default: {
+      ...actual,
+      accessSync: (...args: Parameters<typeof actual.accessSync>) => accessSync(...args),
+    },
   };
 });
 
@@ -297,7 +303,9 @@ describe('ClaudeCliProvider', () => {
 describe('isClaudeCliAvailable', () => {
   beforeEach(() => {
     execSync.mockReset();
-    existsSync.mockReturnValue(false);
+    accessSync.mockImplementation(() => {
+      throw new Error('not found');
+    });
     resetClaudeCliBin();
   });
 

@@ -151,15 +151,19 @@ export async function learnObserveCommand(options: { failure?: boolean; prompt?:
     const eventsSinceLastAnalysis = state.eventCount - (state.lastAnalysisEventCount || 0);
     if (eventsSinceLastAnalysis >= INCREMENTAL_INTERVAL) {
       try {
-        const { resolveCaliber } = await import('../lib/resolve-caliber.js');
+        const { resolveCaliber, isNpxResolution } = await import('../lib/resolve-caliber.js');
         const bin = resolveCaliber();
         const { spawn } = await import('child_process');
         const logPath = path.join(getLearningDir(), LEARNING_FINALIZE_LOG);
         if (!fs.existsSync(getLearningDir())) fs.mkdirSync(getLearningDir(), { recursive: true });
         const logFd = fs.openSync(logPath, 'a');
-        // bin may be multi-word (e.g. '/abs/npx --yes @rely-ai/caliber') — split so
-        // spawn receives a single executable and an argv array.
-        const [exe, ...binArgs] = bin.split(' ');
+        // resolveCaliber() returns multi-word strings only for npx invocations:
+        // '<npx_path> --yes @rely-ai/caliber'. The npx path itself may contain
+        // spaces, so split(' ') is fragile. Detect the known suffix instead.
+        const NPX_SUFFIX = ' --yes @rely-ai/caliber';
+        const [exe, binArgs] = isNpxResolution()
+          ? [bin.slice(0, -NPX_SUFFIX.length) || 'npx', ['--yes', '@rely-ai/caliber']]
+          : [bin, []];
         spawn(exe, [...binArgs, 'learn', 'finalize', '--auto', '--incremental'], {
           detached: true,
           stdio: ['ignore', logFd, logFd],
