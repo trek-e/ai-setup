@@ -118,7 +118,10 @@ describe('pre-commit hook generation', () => {
       process.argv[1] = '/usr/local/bin/caliber';
       delete process.env.npm_execpath;
       mockedExecSync.mockImplementation((cmd: string) => {
-        if (typeof cmd === 'string' && cmd.includes('which caliber')) {
+        if (
+          typeof cmd === 'string' &&
+          (cmd.includes('which caliber') || cmd.includes('where caliber'))
+        ) {
           return '/usr/local/bin/caliber\n';
         }
         if (typeof cmd === 'string' && cmd.includes('rev-parse')) {
@@ -139,7 +142,10 @@ describe('pre-commit hook generation', () => {
       fs.mkdirSync(hooksDir, { recursive: true });
 
       mockedExecSync.mockImplementation((cmd: string) => {
-        if (typeof cmd === 'string' && cmd.includes('which caliber')) {
+        if (
+          typeof cmd === 'string' &&
+          (cmd.includes('which caliber') || cmd.includes('where caliber'))
+        ) {
           return '/usr/local/bin/caliber\n';
         }
         if (typeof cmd === 'string' && cmd.includes('rev-parse')) {
