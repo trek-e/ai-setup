@@ -1,3 +1,9 @@
+## v1.44.0 (2026-04-16)
+
+### Features
+
+- add MiniMax provider support (#157)
+
 ## v1.43.0 (2026-04-16)
 
 ### Features
