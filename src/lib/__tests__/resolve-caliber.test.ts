@@ -190,6 +190,21 @@ describe('pickExecutable', () => {
     expect(pickExecutable('')).toBe('');
     expect(pickExecutable('\n\n')).toBe('');
   });
+
+  it('handles CRLF line endings from Windows `where`', () => {
+    withPlatform('win32', () => {
+      expect(pickExecutable('C:\\bin\\foo\r\nC:\\bin\\foo.cmd\r\n')).toBe('C:\\bin\\foo.cmd');
+    });
+  });
+
+  it('matches the extension only — not `cmd` substrings in directory names', () => {
+    withPlatform('win32', () => {
+      expect(pickExecutable('C:\\cmd-tools\\bin\\caliber')).toBe('C:\\cmd-tools\\bin\\caliber');
+      expect(pickExecutable('C:\\cmd-tools\\bin\\caliber\nC:\\cmd-tools\\bin\\caliber.cmd')).toBe(
+        'C:\\cmd-tools\\bin\\caliber.cmd',
+      );
+    });
+  });
 });
 
 describe('resolveCaliber on Windows', () => {
