@@ -1,3 +1,13 @@
+## v1.45.0 (2026-04-16)
+
+### Features
+
+- add OpenCode as LLM provider (#154)
+
+### Bug Fixes
+
+- surface skill generation failures with details (#142)
+
 ## v1.44.2 (2026-04-16)
 
 ### Bug Fixes
