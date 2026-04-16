@@ -26,7 +26,7 @@ export class OpenAICompatProvider implements LLMProvider {
   async call(options: LLMCallOptions): Promise<string> {
     const response = await this.client.chat.completions.create({
       model: options.model || this.defaultModel,
-      max_tokens: options.maxTokens || 4096,
+      max_completion_tokens: options.maxTokens || 4096,
       ...(this.temperature !== undefined && { temperature: this.temperature }),
       messages: [
         { role: 'system', content: options.system },
@@ -68,7 +68,7 @@ export class OpenAICompatProvider implements LLMProvider {
 
     const stream = await this.client.chat.completions.create({
       model: options.model || this.defaultModel,
-      max_tokens: options.maxTokens || 10240,
+      max_completion_tokens: options.maxTokens || 10240,
       ...(this.temperature !== undefined && { temperature: this.temperature }),
       messages,
       stream: true,
