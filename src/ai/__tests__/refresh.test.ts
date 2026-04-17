@@ -202,4 +202,47 @@ describe('refreshDocs', () => {
 
     // getFastModel() auto-resolves to provider default when no env var is set
   });
+
+  describe('existing docs size budget', () => {
+    // MAX_EXISTING_DOCS_CHARS = 60_000; generate content clearly over the limit.
+    const OVER_BUDGET = 'x'.repeat(70_000);
+    const SMALL = 'small content';
+
+    it('does not truncate when existing docs are within budget', async () => {
+      const prompt = await getRefreshPrompt({ claudeMd: SMALL, agentsMd: SMALL });
+      expect(prompt).toContain(SMALL);
+      expect(prompt).not.toContain('[truncated]');
+    });
+
+    it('truncates existing doc content when total exceeds budget', async () => {
+      const prompt = await getRefreshPrompt({ claudeMd: OVER_BUDGET });
+      // Header must still appear
+      expect(prompt).toContain('[CLAUDE.md]');
+      // Content must be shorter than the original
+      const claudeMdSection = prompt.slice(prompt.indexOf('[CLAUDE.md]'));
+      expect(claudeMdSection.length).toBeLessThan(OVER_BUDGET.length);
+      expect(prompt).toContain('[truncated]');
+    });
+
+    it('truncates proportionally across multiple large docs', async () => {
+      const prompt = await getRefreshPrompt({ claudeMd: OVER_BUDGET, agentsMd: OVER_BUDGET });
+      // Both headers must be present
+      expect(prompt).toContain('[CLAUDE.md]');
+      expect(prompt).toContain('[AGENTS.md]');
+      // Total existing docs section must be within budget (with some slack for headers/markers)
+      const docsSection = prompt.slice(prompt.indexOf('--- Current Documentation ---'));
+      expect(docsSection.length).toBeLessThan(70_000);
+    });
+
+    it('still includes all doc headers even when content is truncated', async () => {
+      const prompt = await getRefreshPrompt({
+        claudeMd: OVER_BUDGET,
+        agentsMd: OVER_BUDGET,
+        claudeSkills: [{ filename: 'my-skill', content: OVER_BUDGET }],
+      });
+      expect(prompt).toContain('[CLAUDE.md]');
+      expect(prompt).toContain('[AGENTS.md]');
+      expect(prompt).toContain('[.claude/skills/my-skill]');
+    });
+  });
 });
