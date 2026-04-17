@@ -96,7 +96,7 @@ function readFinalizeError(): { timestamp: string; error: string } | null {
 
 export async function learnObserveCommand(options: { failure?: boolean; prompt?: boolean }) {
   // Skip in caliber-spawned headless sessions to prevent recursive hook execution.
-  if (process.env.CLAUDE_CODE_SIMPLE === '1') return;
+  if (process.env.CALIBER_SPAWNED === '1') return;
   try {
     const raw = await readStdin();
     if (!raw.trim()) return;
@@ -212,7 +212,7 @@ export async function learnFinalizeCommand(options?: {
   const isIncremental = options?.incremental === true;
 
   // Skip in caliber-spawned headless sessions to prevent recursive hook execution.
-  if (isAuto && process.env.CLAUDE_CODE_SIMPLE === '1') return;
+  if (isAuto && process.env.CALIBER_SPAWNED === '1') return;
 
   if (!options?.force && !isAuto) {
     const { isCaliberRunning } = await import('../lib/lock.js');
