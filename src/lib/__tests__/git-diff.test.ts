@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { execSync as ExecSyncType } from 'child_process';
 
 vi.mock('child_process', () => ({
   execSync: vi.fn(),
@@ -9,14 +10,14 @@ import { collectDiff } from '../git-diff.js';
 
 const mockedExecSync = vi.mocked(execSync);
 
-function makeExecSync(overrides: Record<string, string> = {}) {
-  return (cmd: unknown) => {
+function makeExecSync(overrides: Record<string, string> = {}): typeof ExecSyncType {
+  return ((cmd: unknown) => {
     const c = String(cmd);
     for (const [pattern, result] of Object.entries(overrides)) {
       if (c.includes(pattern)) return result;
     }
     return '';
-  };
+  }) as unknown as typeof ExecSyncType;
 }
 
 describe('collectDiff', () => {
@@ -35,7 +36,7 @@ describe('collectDiff', () => {
         '--others': manyUntrackedFiles,
         '--cached --name-only': '',
         '--cached': '',
-      }) as ReturnType<typeof vi.fn>,
+      }),
     );
 
     const result = collectDiff(null);
@@ -52,7 +53,7 @@ describe('collectDiff', () => {
         '--others': repeated,
         '--cached --name-only': repeated,
         '--cached': '',
-      }) as ReturnType<typeof vi.fn>,
+      }),
     );
 
     const result = collectDiff(null);
@@ -69,7 +70,7 @@ describe('collectDiff', () => {
         '--others': '',
         '--cached --name-only': '',
         '--cached': '',
-      }) as ReturnType<typeof vi.fn>,
+      }),
     );
 
     const result = collectDiff(null);
@@ -85,7 +86,7 @@ describe('collectDiff', () => {
         '--others': '',
         '--cached --name-only': '',
         '--cached': '',
-      }) as ReturnType<typeof vi.fn>,
+      }),
     );
 
     const result = collectDiff(null);
